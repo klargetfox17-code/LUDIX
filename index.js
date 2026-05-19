@@ -26,7 +26,10 @@ try { db.prepare('ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1').run() }
 try { db.prepare('ALTER TABLE users ADD COLUMN winstreak INTEGER DEFAULT 0').run() } catch(e) {}
 try { db.prepare('ALTER TABLE users ADD COLUMN totalWon INTEGER DEFAULT 0').run() } catch(e) {}
 try { db.prepare('ALTER TABLE users ADD COLUMN totalLost INTEGER DEFAULT 0').run() } catch(e) {}
-
+try { db.prepare('ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN casesOpened INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN allTimeProfit INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN lastSpin INTEGER DEFAULT 0').run() } catch(e) {}
 function getUser(id) {
   return db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
 }
@@ -60,9 +63,9 @@ bot.start((ctx) => {
   ctx.reply(
     '💸 ДОБРО ПОЖАЛОВАТЬ В DOPELINE',
     Markup.keyboard([
-      ['💰 Профиль', '🎰 Казино'],
       ['🛒 Магазин', '🎁 Daily'],
-      ['🏆 Топ']
+['🏆 Топ', '🏦 Кредит'],
+['🎁 Кейсы', '📊 Стата']
     ]).resize()
   )
 })
@@ -110,7 +113,51 @@ bot.hears('🏆 Топ', (ctx) => {
 
   ctx.reply(text, { parse_mode: 'Markdown' })
 })
+// КРЕДИТ
 
+bot.hears('🏦 Кредит', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+
+  if(user.credits >= 5) {
+    return ctx.reply('💀 Банк заблокировал тебе кредиты')
+  }
+
+  db.prepare(`
+    UPDATE users
+    SET balance = balance + 10000,
+    credits = credits + 1
+    WHERE telegramId = ?
+  `).run(String(ctx.from.id))
+
+  ctx.reply(`
+🏦 КРЕДИТ ОДОБРЕН
+
+💵 +10000$
+
+🤡 Надеемся ты не сольешь это за 15 секунд
+  `)
+})
+// СТАТА
+
+bot.hears('📊 Стата', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+
+  ctx.reply(`
+📊 СТАТИСТИКА
+
+💰 Всего выиграно: ${user.totalWon}$
+
+💀 Всего проиграно: ${user.totalLost}$
+
+🎁 Кейсов открыто: ${user.casesOpened}
+
+🏦 Кредитов взято: ${user.credits}
+
+📈 Общий профит: ${user.allTimeProfit}$
+
+🔥 Винстрик: ${user.winstreak}
+  `)
+})
 // 4. МАГАЗИН
 bot.hears('🛒 Магазин', (ctx) => {
   ctx.reply(
@@ -137,7 +184,18 @@ bot.hears('🎁 Daily', (ctx) => {
 
   ctx.reply('🎁 Ты получил 5000$')
 })
+// КЕЙСЫ
 
+bot.hears('🎁 Кейсы', (ctx) => {
+  ctx.reply(
+    '🎁 ВЫБЕРИ КЕЙС',
+    Markup.inlineKeyboard([
+      [Markup.button.callback('📦 Обычный — 2500$', 'case_normal')],
+      [Markup.button.callback('🔥 Рискованный — 10000$', 'case_risky')],
+      [Markup.button.callback('💎 Легендарный — 50000$', 'case_legend')]
+    ])
+  )
+})
 
 // ОБРАБОТКА ДЕЙСТВИЙ (ИНЛАЙН-КНОПКИ ИГР И ПОКУПОК)
 
@@ -201,9 +259,17 @@ bot.action('coinflip', (ctx) => {
       WHERE telegramId = ?
     `).run(String(ctx.from.id))
 
-    ctx.reply('💀 Ты проиграл')
-  }
-})
+    const loseMessages = [
+  '💀 Ты проиграл',
+  '🤡 Ну вот и зарплата ушла',
+  '📉 Инвестор из тебя так себе',
+  '💸 Казино говорит спасибо',
+  '🪦 press F'
+]
+
+ctx.reply(
+  loseMessages[Math.floor(Math.random() * loseMessages.length)]
+)
 
 // ИГРА SLOTS
 bot.action('slots', (ctx) => {
@@ -226,7 +292,13 @@ bot.action('slots', (ctx) => {
       'UPDATE users SET balance = balance + 5000 WHERE telegramId = ?'
     ).run(String(ctx.from.id))
 
-    ctx.reply(`🎰 ${result}\n\n🤑 JACKPOT +5000$`)
+    ctx.reply(`
+🎰 ${result}
+
+🤑 JACKPOT +5000$
+
+🚨 HUGE WIN
+`)
   } else {
     db.prepare(
       'UPDATE users SET balance = balance - 1000 WHERE telegramId = ?'
@@ -235,7 +307,113 @@ bot.action('slots', (ctx) => {
     ctx.reply(`🎰 ${result}\n\n💀 Проигрыш`) 
   }
 })
+// ОБЫЧНЫЙ КЕЙС
 
+bot.action('case_normal', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+
+  if(user.balance < 2500) {
+    return ctx.reply('💀 Недостаточно денег')
+  }
+
+  db.prepare(`
+    UPDATE users
+    SET balance = balance - 2500,
+    casesOpened = casesOpened + 1
+    WHERE telegramId = ?
+  `).run(String(ctx.from.id))
+
+  const rewards = [1000, 2500, 5000, 10000, 25000]
+  const reward = rewards[Math.floor(Math.random() * rewards.length)]
+
+  db.prepare(`
+    UPDATE users
+    SET balance = balance + ?,
+    allTimeProfit = allTimeProfit + ?
+    WHERE telegramId = ?
+  `).run(reward, reward, String(ctx.from.id))
+
+  ctx.reply(`
+📦 КЕЙС ОТКРЫТ
+
+💵 Дроп: ${reward}$
+
+${reward >= 10000 ? '🔥 HUGE WIN' : '😐 Нормально'}
+  `)
+})
+// РИСКОВАННЫЙ КЕЙС
+
+bot.action('case_risky', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+
+  if(user.balance < 10000) {
+    return ctx.reply('💀 Недостаточно денег')
+  }
+
+  db.prepare(`
+    UPDATE users
+    SET balance = balance - 10000,
+    casesOpened = casesOpened + 1
+    WHERE telegramId = ?
+  `).run(String(ctx.from.id))
+
+  const rewards = [0, 5000, 15000, 50000, 100000]
+
+  const reward = rewards[Math.floor(Math.random() * rewards.length)]
+
+  db.prepare(`
+    UPDATE users
+    SET balance = balance + ?
+    WHERE telegramId = ?
+  `).run(reward, String(ctx.from.id))
+
+  ctx.reply(`
+🔥 РИСКОВАННЫЙ КЕЙС
+
+💵 ${reward}$
+
+${reward === 0 ? '🤡 СКАМ' : '🚨 ЖЕСТКИЙ ДОП'}
+  `)
+})
+// ЛЕГЕНДАРНЫЙ КЕЙС
+
+bot.action('case_legend', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+
+  if(user.balance < 50000) {
+    return ctx.reply('💀 Ты слишком бедный')
+  }
+
+  db.prepare(`
+    UPDATE users
+    SET balance = balance - 50000,
+    casesOpened = casesOpened + 1
+    WHERE telegramId = ?
+  `).run(String(ctx.from.id))
+
+  const chance = Math.random()
+
+  let reward = 0
+
+  if(chance > 0.95) reward = 1000000
+  else if(chance > 0.85) reward = 250000
+  else if(chance > 0.65) reward = 100000
+  else reward = 10000
+
+  db.prepare(`
+    UPDATE users
+    SET balance = balance + ?
+    WHERE telegramId = ?
+  `).run(reward, String(ctx.from.id))
+
+  ctx.reply(`
+💎 ЛЕГЕНДАРНЫЙ КЕЙС
+
+🚨 ВЫБИТО: ${reward}$
+
+${reward >= 250000 ? '🚨🚨🚨 JACKPOT' : '🤑 Неплохо'}
+  `)
+})
 // PASSIVE INCOME
 setInterval(() => {
   const users = db.prepare('SELECT * FROM users').all()
