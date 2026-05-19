@@ -30,6 +30,9 @@ try { db.prepare('ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 0').run()
 try { db.prepare('ALTER TABLE users ADD COLUMN casesOpened INTEGER DEFAULT 0').run() } catch(e) {}
 try { db.prepare('ALTER TABLE users ADD COLUMN allTimeProfit INTEGER DEFAULT 0').run() } catch(e) {}
 try { db.prepare('ALTER TABLE users ADD COLUMN lastSpin INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN debt INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN debtTimer INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN blacklist INTEGER DEFAULT 0').run() } catch(e) {}
 function getUser(id) {
   return db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
 }
@@ -66,7 +69,8 @@ bot.start((ctx) => {
   ['💰 Профиль', '🎰 Казино'],
   ['🛒 Магазин', '🎁 Daily'],
   ['🏆 Топ', '🏦 Кредит'],
-  ['🎁 Кейсы', '📊 Стата']
+  ['💳 Погасить', '📊 Стата'],
+  ['🎁 Кейсы']
 ]).resize()
   )
 })
@@ -119,23 +123,76 @@ bot.hears('🏆 Топ', (ctx) => {
 bot.hears('🏦 Кредит', (ctx) => {
   const user = getUser(String(ctx.from.id))
 
-  if(user.credits >= 5) {
-    return ctx.reply('💀 Банк заблокировал тебе кредиты')
+  if(user.blacklist === 1) {
+    return ctx.reply('🚫 Банк внес тебя в черный список')
   }
+
+  if(user.debt > 0) {
+    return ctx.reply(`
+💀 У тебя уже есть кредит
+
+📉 Долг: ${user.debt}$
+
+Верни сначала его
+    `)
+  }
+
+  const creditAmount = 10000
+  const finalDebt = 15000
 
   db.prepare(`
     UPDATE users
-    SET balance = balance + 10000,
-    credits = credits + 1
+    SET
+      balance = balance + ?,
+      debt = ?,
+      debtTimer = ?
     WHERE telegramId = ?
-  `).run(String(ctx.from.id))
+  `).run(
+    creditAmount,
+    finalDebt,
+    Date.now(),
+    String(ctx.from.id)
+  )
 
   ctx.reply(`
 🏦 КРЕДИТ ОДОБРЕН
 
-💵 +10000$
+💵 Получено: ${creditAmount}$
 
-🤡 Надеемся ты не сольешь это за 15 секунд
+📉 Вернуть нужно: ${finalDebt}$
+
+⏳ Срок: 24 часа
+
+🤡 удачи не слить это за 4 минуты
+  `)
+})
+bot.hears('💳 Погасить', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+
+  if(user.debt <= 0) {
+    return ctx.reply('✅ У тебя нет долгов')
+  }
+
+  if(user.balance < user.debt) {
+    return ctx.reply(`
+💀 Недостаточно денег
+
+📉 Долг: ${user.debt}$
+    `)
+  }
+
+  db.prepare(`
+    UPDATE users
+    SET
+      balance = balance - debt,
+      debt = 0
+    WHERE telegramId = ?
+  `).run(String(ctx.from.id))
+
+  ctx.reply(`
+✅ КРЕДИТ ПОГАШЕН
+
+🏦 Банк снова тебе доверяет
   `)
 })
 // СТАТА
@@ -418,6 +475,52 @@ bot.action('case_legend', (ctx) => {
 ${reward >= 250000 ? '🚨🚨🚨 JACKPOT' : '🤑 Неплохо'}
   `)
 })
+// ПРОСРОЧКА КРЕДИТА
+
+setInterval(() => {
+
+  const users = db.prepare('SELECT * FROM users').all()
+
+  for(const user of users) {
+
+    if(user.debt > 0) {
+
+      const passed = Date.now() - user.debtTimer
+
+      // 24 часа
+      if(passed >= 86400000) {
+
+        // если денег хватает — автоматическое списание
+        if(user.balance >= user.debt) {
+
+          db.prepare(`
+            UPDATE users
+            SET
+              balance = balance - debt,
+              debt = 0
+            WHERE telegramId = ?
+          `).run(user.telegramId)
+
+        } else {
+
+          // штраф
+          db.prepare(`
+            UPDATE users
+            SET
+              income = income - 5,
+              blacklist = 1
+            WHERE telegramId = ?
+          `).run(user.telegramId)
+
+        }
+
+      }
+
+    }
+
+  }
+
+}, 60000)
 // PASSIVE INCOME
 setInterval(() => {
   const users = db.prepare('SELECT * FROM users').all()
