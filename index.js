@@ -13,7 +13,12 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT,
   balance INTEGER DEFAULT 1000,
   income INTEGER DEFAULT 20,
-  lastDaily INTEGER DEFAULT 0
+  lastDaily INTEGER DEFAULT 0,
+  xp INTEGER DEFAULT 0,
+  level INTEGER DEFAULT 1,
+  winstreak INTEGER DEFAULT 0,
+  totalWon INTEGER DEFAULT 0,
+  totalLost INTEGER DEFAULT 0
 )
 `).run()
 function getUser(id) {
@@ -21,9 +26,20 @@ function getUser(id) {
 }
 
 function createUser(id, username) {
-  db.prepare(
-    'INSERT OR IGNORE INTO users (telegramId, username) VALUES (?, ?)'
-  ).run(id, username)
+  function checkLevelUp(id) {
+  const user = getUser(id)
+
+  const needXP = user.level * 100
+
+  if(user.xp >= needXP) {
+    db.prepare(
+      'UPDATE users SET level = level + 1, xp = 0, balance = balance + 10000 WHERE telegramId = ?'
+    ).run(id)
+
+    return true
+  }
+
+  return false
 }
 // START
 
@@ -39,9 +55,23 @@ bot.start((ctx) => {
       [Markup.button.callback('💰 Профиль', 'profile')],
       [Markup.button.callback('🎰 Казино', 'casino')],
       [Markup.button.callback('🛒 Магазин', 'shop')],
-      [Markup.button.callback('🎁 Daily', 'daily')]
+      [Markup.button.callback('🎁 Daily', 'daily')],
+      [Markup.button.callback('🏆 Топ', 'top')]
     ])
   )
+})
+bot.action('top', (ctx) => {
+  const users = db.prepare(
+    'SELECT * FROM users ORDER BY balance DESC LIMIT 10'
+  ).all()
+
+  let text = '🏆 *ТОП-10 ИГРОКОВ DOPELINE:*\n\n'
+  
+  users.forEach((user, index) => {
+    text += `${index + 1}. @${user.username} — *${user.balance}$*\n`
+  })
+
+  ctx.reply(text, { parse_mode: 'Markdown' })
 })
 // PROFILE
 
@@ -53,6 +83,10 @@ bot.action('profile', (ctx) => {
 
 💵 Баланс: ${user.balance}$
 📈 Доход: ${user.income}$/мин
+
+🏆 Уровень: ${user.level}
+⭐ XP: ${user.xp}
+🔥 Винстрик: ${user.winstreak}
   `)
 })
 // SHOP
@@ -138,13 +172,19 @@ bot.action('coinflip', (ctx) => {
     db.prepare(
       'UPDATE users SET balance = balance + 1000 WHERE telegramId = ?'
     ).run(String(ctx.from.id))
+db.prepare(
+  'UPDATE users SET xp = xp + 15, winstreak = winstreak + 1, totalWon = totalWon + 1000 WHERE telegramId = ?'
+ ).run(String(ctx.from.id))
 
+ checkLevelUp(String(ctx.from.id))
     ctx.reply('🤑 Ты выиграл 1000$')
   } else {
     db.prepare(
       'UPDATE users SET balance = balance - 1000 WHERE telegramId = ?'
     ).run(String(ctx.from.id))
-
+db.prepare(
+  'UPDATE users SET xp = xp + 5, winstreak = 0, totalLost = totalLost + 1000 WHERE telegramId = ?'
+ ).run(String(ctx.from.id))
     ctx.reply('💀 Ты проиграл')
   }
 })
