@@ -61,7 +61,7 @@ bot.start((ctx) => {
   createUser(id, username)
 
   ctx.reply(
-    '💸 ДОБРО ПОЖАЛОВАТЬ В DOPELINE',
+    '💸 ДОБРО ПОЖАЛОВАТЬ В LUDIX',
    Markup.keyboard([
   ['💰 Профиль', '🎰 Казино'],
   ['🛒 Магазин', '🎁 Daily'],
