@@ -271,6 +271,9 @@ bot.action('coinflip', (ctx) => {
 ctx.reply(
   loseMessages[Math.floor(Math.random() * loseMessages.length)]
 )
+
+  }
+
 })
 // ИГРА SLOTS
 bot.action('slots', (ctx) => {
