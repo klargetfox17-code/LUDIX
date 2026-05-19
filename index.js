@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS users (
   totalLost INTEGER DEFAULT 0
 )
 `).run()
+try { db.prepare('ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN winstreak INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN totalWon INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN totalLost INTEGER DEFAULT 0').run() } catch(e) {}
 
 function getUser(id) {
   return db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
