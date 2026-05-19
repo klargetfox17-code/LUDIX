@@ -21,28 +21,31 @@ CREATE TABLE IF NOT EXISTS users (
   totalLost INTEGER DEFAULT 0
 )
 `).run()
+
 function getUser(id) {
   return db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
 }
 
 function createUser(id, username) {
-  function checkLevelUp(id) {
-  const user = getUser(id)
+  db.prepare(
+    'INSERT OR IGNORE INTO users (telegramId, username) VALUES (?, ?)'
+  ).run(id, username)
+} // <-- ИСПРАВЛЕНО: Закрыли функцию createUser перед объявлением следующей
 
+function checkLevelUp(id) {
+  const user = getUser(id)
   const needXP = user.level * 100
 
-  if(user.xp >= needXP) {
+  if (user.xp >= needXP) {
     db.prepare(
       'UPDATE users SET level = level + 1, xp = 0, balance = balance + 10000 WHERE telegramId = ?'
     ).run(id)
-
     return true
   }
-
   return false
 }
-// START
 
+// START
 bot.start((ctx) => {
   const id = String(ctx.from.id)
   const username = ctx.from.username || 'player'
@@ -60,6 +63,8 @@ bot.start((ctx) => {
     ])
   )
 })
+
+// LEADERBOARD
 bot.action('top', (ctx) => {
   const users = db.prepare(
     'SELECT * FROM users ORDER BY balance DESC LIMIT 10'
@@ -73,8 +78,8 @@ bot.action('top', (ctx) => {
 
   ctx.reply(text, { parse_mode: 'Markdown' })
 })
-// PROFILE
 
+// PROFILE
 bot.action('profile', (ctx) => {
   const user = getUser(String(ctx.from.id))
 
@@ -85,12 +90,12 @@ bot.action('profile', (ctx) => {
 📈 Доход: ${user.income}$/мин
 
 🏆 Уровень: ${user.level}
-⭐ XP: ${user.xp}
+⭐ XP: ${user.xp} / ${user.level * 100}
 🔥 Винстрик: ${user.winstreak}
   `)
 })
-// SHOP
 
+// SHOP
 bot.action('shop', (ctx) => {
   ctx.reply(
     '🛒 МАГАЗИН',
@@ -100,12 +105,12 @@ bot.action('shop', (ctx) => {
     ])
   )
 })
-// BUY PC
 
+// BUY PC
 bot.action('buy_pc', (ctx) => {
   const user = getUser(String(ctx.from.id))
 
-  if(user.balance < 1000) {
+  if (user.balance < 1000) {
     return ctx.reply('💀 Недостаточно денег')
   }
 
@@ -115,12 +120,12 @@ bot.action('buy_pc', (ctx) => {
 
   ctx.reply('💻 Ты купил ноутбук')
 })
-// BUY FARM
 
+// BUY FARM
 bot.action('buy_farm', (ctx) => {
   const user = getUser(String(ctx.from.id))
 
-  if(user.balance < 5000) {
+  if (user.balance < 5000) {
     return ctx.reply('💀 Недостаточно денег')
   }
 
@@ -130,13 +135,13 @@ bot.action('buy_farm', (ctx) => {
 
   ctx.reply('⛏ Ты купил криптоферму')
 })
-// DAILY
 
+// DAILY
 bot.action('daily', (ctx) => {
   const user = getUser(String(ctx.from.id))
   const now = Date.now()
 
-  if(now - user.lastDaily < 86400000) {
+  if (now - user.lastDaily < 86400000) {
     return ctx.reply('⏳ Daily уже забран')
   }
 
@@ -146,8 +151,8 @@ bot.action('daily', (ctx) => {
 
   ctx.reply('🎁 Ты получил 5000$')
 })
-// CASINO
 
+// CASINO
 bot.action('casino', (ctx) => {
   ctx.reply(
     '🎰 КАЗИНО',
@@ -157,43 +162,47 @@ bot.action('casino', (ctx) => {
     ])
   )
 })
-// COINFLIP
 
+// COINFLIP
 bot.action('coinflip', (ctx) => {
   const user = getUser(String(ctx.from.id))
 
-  if(user.balance < 1000) {
+  if (user.balance < 1000) {
     return ctx.reply('💀 Недостаточно денег')
   }
 
   const win = Math.random() > 0.5
 
-  if(win) {
-    db.prepare(
-      'UPDATE users SET balance = balance + 1000 WHERE telegramId = ?'
-    ).run(String(ctx.from.id))
-db.prepare(
-  'UPDATE users SET xp = xp + 15, winstreak = winstreak + 1, totalWon = totalWon + 1000 WHERE telegramId = ?'
- ).run(String(ctx.from.id))
+  if (win) {
+    // ИСПРАВЛЕНО: Объединили два запроса обновления в один быстрый
+    db.prepare(`
+      UPDATE users 
+      SET balance = balance + 1000, xp = xp + 15, winstreak = winstreak + 1, totalWon = totalWon + 1000 
+      WHERE telegramId = ?
+    `).run(String(ctx.from.id))
 
- checkLevelUp(String(ctx.from.id))
+    const leveledUp = checkLevelUp(String(ctx.from.id))
+    
+    if (leveledUp) {
+      ctx.reply('🎉 ОГО! Ты повысил свой уровень! Получено +10 000$!')
+    }
     ctx.reply('🤑 Ты выиграл 1000$')
   } else {
-    db.prepare(
-      'UPDATE users SET balance = balance - 1000 WHERE telegramId = ?'
-    ).run(String(ctx.from.id))
-db.prepare(
-  'UPDATE users SET xp = xp + 5, winstreak = 0, totalLost = totalLost + 1000 WHERE telegramId = ?'
- ).run(String(ctx.from.id))
+    db.prepare(`
+      UPDATE users 
+      SET balance = balance - 1000, xp = xp + 5, winstreak = 0, totalLost = totalLost + 1000 
+      WHERE telegramId = ?
+    `).run(String(ctx.from.id))
+
     ctx.reply('💀 Ты проиграл')
   }
 })
-// SLOTS
 
+// SLOTS
 bot.action('slots', (ctx) => {
   const user = getUser(String(ctx.from.id))
 
-  if(user.balance < 1000) {
+  if (user.balance < 1000) {
     return ctx.reply('💀 Недостаточно денег')
   }
 
@@ -205,30 +214,26 @@ bot.action('slots', (ctx) => {
 
   const result = `${a} ${b} ${c}`
 
-  if(a === b && b === c) {
+  if (a === b && b === c) {
     db.prepare(
       'UPDATE users SET balance = balance + 5000 WHERE telegramId = ?'
     ).run(String(ctx.from.id))
 
-    ctx.reply(`🎰 ${result}
-
-🤑 JACKPOT +5000$`)
+    ctx.reply(`🎰 ${result}\n\n🤑 JACKPOT +5000$`)
   } else {
     db.prepare(
       'UPDATE users SET balance = balance - 1000 WHERE telegramId = ?'
     ).run(String(ctx.from.id))
 
-    ctx.reply(`🎰 ${result}
-
-💀 Проигрыш`) 
+    ctx.reply(`🎰 ${result}\n\n💀 Проигрыш`) 
   }
 })
-// PASSIVE INCOME
 
+// PASSIVE INCOME
 setInterval(() => {
   const users = db.prepare('SELECT * FROM users').all()
 
-  for(const user of users) {
+  for (const user of users) {
     db.prepare(
       'UPDATE users SET balance = balance + income WHERE telegramId = ?'
     ).run(user.telegramId)
@@ -250,9 +255,10 @@ async function startBot() {
 
 startBot()
 
-// Корректная остановка бота при перезапуске сервера
 process.once('SIGINT', () => bot.stop('SIGINT'))
 process.once('SIGTERM', () => bot.stop('SIGTERM'))
+
+// ВЕБ-СЕРВЕР ДЛЯ RENDER
 const http = require('http')
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' })
