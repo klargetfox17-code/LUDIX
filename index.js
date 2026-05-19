@@ -54,13 +54,11 @@ bot.start((ctx) => {
 
   ctx.reply(
     '💸 ДОБРО ПОЖАЛОВАТЬ В DOPELINE',
-    Markup.inlineKeyboard([
-      [Markup.button.callback('💰 Профиль', 'profile')],
-      [Markup.button.callback('🎰 Казино', 'casino')],
-      [Markup.button.callback('🛒 Магазин', 'shop')],
-      [Markup.button.callback('🎁 Daily', 'daily')],
-      [Markup.button.callback('🏆 Топ', 'top')]
-    ])
+    Markup.keyboard([
+      ['💰 Профиль', '🎰 Казино'],
+      ['🛒 Магазин', '🎁 Daily'],
+      ['🏆 Топ']
+    ]).resize() // .resize() делает кнопки компактными и аккуратными под размер экрана
   )
 })
 
@@ -80,19 +78,35 @@ bot.action('top', (ctx) => {
 })
 
 // PROFILE
-bot.action('profile', (ctx) => {
+bot.hears('💰 Профиль', (ctx) => {
   const user = getUser(String(ctx.from.id))
+  // ... ваш старый код профиля
+})
 
-  ctx.reply(`
-👤 @${user.username}
+// Переделываем CASINO
+bot.hears('🎰 Казино', (ctx) => {
+  ctx.reply(
+    '🎰 КАЗИНО',
+    Markup.inlineKeyboard([ // Кнопки ВНУТРИ казино (игр) можно оставить инлайновыми!
+      [Markup.button.callback('🪙 Coinflip 1000$', 'coinflip')],
+      [Markup.button.callback('🎲 Slots 1000$', 'slots')]
+    ])
+  )
+})
 
-💵 Баланс: ${user.balance}$
-📈 Доход: ${user.income}$/мин
+// Переделываем TOP
+bot.hears('🏆 Топ', (ctx) => {
+  // ... ваш старый код топа
+})
 
-🏆 Уровень: ${user.level}
-⭐ XP: ${user.xp} / ${user.level * 100}
-🔥 Винстрик: ${user.winstreak}
-  `)
+// Переделываем SHOP
+bot.hears('🛒 Магазин', (ctx) => {
+  // ... ваш старый код магазина
+})
+
+// Переделываем DAILY
+bot.hears('🎁 Daily', (ctx) => {
+  // ... ваш старый код ежедневной награды
 })
 
 // SHOP
