@@ -62,11 +62,12 @@ bot.start((ctx) => {
 
   ctx.reply(
     '💸 ДОБРО ПОЖАЛОВАТЬ В DOPELINE',
-    Markup.keyboard([
-      ['🛒 Магазин', '🎁 Daily'],
-['🏆 Топ', '🏦 Кредит'],
-['🎁 Кейсы', '📊 Стата']
-    ]).resize()
+   Markup.keyboard([
+  ['💰 Профиль', '🎰 Казино'],
+  ['🛒 Магазин', '🎁 Daily'],
+  ['🏆 Топ', '🏦 Кредит'],
+  ['🎁 Кейсы', '📊 Стата']
+]).resize()
   )
 })
 
@@ -270,7 +271,7 @@ bot.action('coinflip', (ctx) => {
 ctx.reply(
   loseMessages[Math.floor(Math.random() * loseMessages.length)]
 )
-
+})
 // ИГРА SLOTS
 bot.action('slots', (ctx) => {
   const user = getUser(String(ctx.from.id))
