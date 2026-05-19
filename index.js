@@ -3,7 +3,8 @@ const Database = require('better-sqlite3')
 require('dotenv').config()
 
 // Чистая инициализация без лишних скобок
-const bot = new Telegraf(process.env.BOT_TOKEN)
+const token = process.env.BOT_TOKEN || '8721680626:AAFuGPHaUhZfXQeRQsEQXcNvYG5uDzWIG5s'
+const bot = new Telegraf(token)
 const db = new Database('game.db')
 
 db.prepare(`
