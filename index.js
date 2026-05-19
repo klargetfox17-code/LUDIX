@@ -30,7 +30,7 @@ function createUser(id, username) {
   db.prepare(
     'INSERT OR IGNORE INTO users (telegramId, username) VALUES (?, ?)'
   ).run(id, username)
-} // <-- ИСПРАВЛЕНО: Закрыли функцию createUser перед объявлением следующей
+}
 
 function checkLevelUp(id) {
   const user = getUser(id)
@@ -45,7 +45,7 @@ function checkLevelUp(id) {
   return false
 }
 
-// START
+// START — Постоянное меню на кнопках
 bot.start((ctx) => {
   const id = String(ctx.from.id)
   const username = ctx.from.username || 'player'
@@ -58,12 +58,41 @@ bot.start((ctx) => {
       ['💰 Профиль', '🎰 Казино'],
       ['🛒 Магазин', '🎁 Daily'],
       ['🏆 Топ']
-    ]).resize() // .resize() делает кнопки компактными и аккуратными под размер экрана
+    ]).resize()
   )
 })
 
-// LEADERBOARD
-bot.action('top', (ctx) => {
+// ОБРАБОТКА ПОСТОЯННЫХ КНОПОК (МЕНЮ)
+
+// 1. ПРОФИЛЬ
+bot.hears('💰 Профиль', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+
+  ctx.reply(`
+👤 @${user.username}
+
+💵 Баланс: ${user.balance}$
+📈 Доход: ${user.income}$/мин
+
+🏆 Уровень: ${user.level}
+⭐ XP: ${user.xp} / ${user.level * 100}
+🔥 Винстрик: ${user.winstreak}
+  `)
+})
+
+// 2. КАЗИНО (Инлайн кнопки для под-меню игр)
+bot.hears('🎰 Казино', (ctx) => {
+  ctx.reply(
+    '🎰 КАЗИНО',
+    Markup.inlineKeyboard([
+      [Markup.button.callback('🪙 Coinflip 1000$', 'coinflip')],
+      [Markup.button.callback('🎲 Slots 1000$', 'slots')]
+    ])
+  )
+})
+
+// 3. ТОП
+bot.hears('🏆 Топ', (ctx) => {
   const users = db.prepare(
     'SELECT * FROM users ORDER BY balance DESC LIMIT 10'
   ).all()
@@ -77,40 +106,8 @@ bot.action('top', (ctx) => {
   ctx.reply(text, { parse_mode: 'Markdown' })
 })
 
-// PROFILE
-bot.hears('💰 Профиль', (ctx) => {
-  const user = getUser(String(ctx.from.id))
-  // ... ваш старый код профиля
-})
-
-// Переделываем CASINO
-bot.hears('🎰 Казино', (ctx) => {
-  ctx.reply(
-    '🎰 КАЗИНО',
-    Markup.inlineKeyboard([ // Кнопки ВНУТРИ казино (игр) можно оставить инлайновыми!
-      [Markup.button.callback('🪙 Coinflip 1000$', 'coinflip')],
-      [Markup.button.callback('🎲 Slots 1000$', 'slots')]
-    ])
-  )
-})
-
-// Переделываем TOP
-bot.hears('🏆 Топ', (ctx) => {
-  // ... ваш старый код топа
-})
-
-// Переделываем SHOP
+// 4. МАГАЗИН
 bot.hears('🛒 Магазин', (ctx) => {
-  // ... ваш старый код магазина
-})
-
-// Переделываем DAILY
-bot.hears('🎁 Daily', (ctx) => {
-  // ... ваш старый код ежедневной награды
-})
-
-// SHOP
-bot.action('shop', (ctx) => {
   ctx.reply(
     '🛒 МАГАЗИН',
     Markup.inlineKeyboard([
@@ -120,38 +117,8 @@ bot.action('shop', (ctx) => {
   )
 })
 
-// BUY PC
-bot.action('buy_pc', (ctx) => {
-  const user = getUser(String(ctx.from.id))
-
-  if (user.balance < 1000) {
-    return ctx.reply('💀 Недостаточно денег')
-  }
-
-  db.prepare(
-    'UPDATE users SET balance = balance - 1000, income = income + 5 WHERE telegramId = ?'
-  ).run(String(ctx.from.id))
-
-  ctx.reply('💻 Ты купил ноутбук')
-})
-
-// BUY FARM
-bot.action('buy_farm', (ctx) => {
-  const user = getUser(String(ctx.from.id))
-
-  if (user.balance < 5000) {
-    return ctx.reply('💀 Недостаточно денег')
-  }
-
-  db.prepare(
-    'UPDATE users SET balance = balance - 5000, income = income + 20 WHERE telegramId = ?'
-  ).run(String(ctx.from.id))
-
-  ctx.reply('⛏ Ты купил криптоферму')
-})
-
-// DAILY
-bot.action('daily', (ctx) => {
+// 5. ЕЖЕДНЕВНЫЙ БОНУС
+bot.hears('🎁 Daily', (ctx) => {
   const user = getUser(String(ctx.from.id))
   const now = Date.now()
 
@@ -166,18 +133,40 @@ bot.action('daily', (ctx) => {
   ctx.reply('🎁 Ты получил 5000$')
 })
 
-// CASINO
-bot.action('casino', (ctx) => {
-  ctx.reply(
-    '🎰 КАЗИНО',
-    Markup.inlineKeyboard([
-      [Markup.button.callback('🪙 Coinflip 1000$', 'coinflip')],
-      [Markup.button.callback('🎲 Slots 1000$', 'slots')]
-    ])
-  )
+
+// ОБРАБОТКА ДЕЙСТВИЙ (ИНЛАЙН-КНОПКИ ИГР И ПОКУПОК)
+
+// ПОКУПКА ПК
+bot.action('buy_pc', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+
+  if (user.balance < 1000) {
+    return ctx.reply('💀 Недостаточно денег')
+  }
+
+  db.prepare(
+    'UPDATE users SET balance = balance - 1000, income = income + 5 WHERE telegramId = ?'
+  ).run(String(ctx.from.id))
+
+  ctx.reply('💻 Ты купил ноутбук')
 })
 
-// COINFLIP
+// ПОКУПКА КРИПТОФЕРМЫ
+bot.action('buy_farm', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+
+  if (user.balance < 5000) {
+    return ctx.reply('💀 Недостаточно денег')
+  }
+
+  db.prepare(
+    'UPDATE users SET balance = balance - 5000, income = income + 20 WHERE telegramId = ?'
+  ).run(String(ctx.from.id))
+
+  ctx.reply('⛏ Ты купил криптоферму')
+})
+
+// ИГРА СOINFLIP
 bot.action('coinflip', (ctx) => {
   const user = getUser(String(ctx.from.id))
 
@@ -188,7 +177,6 @@ bot.action('coinflip', (ctx) => {
   const win = Math.random() > 0.5
 
   if (win) {
-    // ИСПРАВЛЕНО: Объединили два запроса обновления в один быстрый
     db.prepare(`
       UPDATE users 
       SET balance = balance + 1000, xp = xp + 15, winstreak = winstreak + 1, totalWon = totalWon + 1000 
@@ -212,7 +200,7 @@ bot.action('coinflip', (ctx) => {
   }
 })
 
-// SLOTS
+// ИГРА SLOTS
 bot.action('slots', (ctx) => {
   const user = getUser(String(ctx.from.id))
 
