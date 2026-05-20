@@ -33,16 +33,39 @@ const columns = [
   'xp DEFAULT 0', 'level DEFAULT 1', 'winstreak DEFAULT 0', 
   'totalWon DEFAULT 0', 'totalLost DEFAULT 0', 'casesOpened DEFAULT 0', 
   'debt DEFAULT 0', 'debtTimer DEFAULT 0', 'blacklist DEFAULT 0', 
-  'credits DEFAULT 0', 'allTimeProfit DEFAULT 0'
+  'credits DEFAULT 0', 'allTimeProfit DEFAULT 0',
+  'lastWork DEFAULT 0' // <-- ОБЯЗАТЕЛЬНО ДОПИШИТЕ СЮДА ЧЕРЕЗ ЗАПЯТУЮ!
 ]
 for (const col of columns) {
   try { db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run() } catch (e) {}
 }
 
 // ГЛОБАЛЬНЫЕ ФУНКЦИИ ИГРЫ
-function getUser(id) {
-  return db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
+// СМАРТ-ПОЛУЧЕНИЕ ИГРОКА (Авто-старт при краше сервера)
+function getUser(id, ctx = null) {
+  let user = db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
+  
+  // Если сервера перезагрузился, а игрок нажал кнопку — создаем его в базе на лету!
+  if (!user && ctx) {
+    const username = ctx.from.username || 'player'
+    createUser(id, username)
+    user = db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
+    
+    ctx.reply(
+      '🔄 *LUDIX СЕРВЕР ОБНОВЛЕН!*\nВаш профиль успешно восстановлен. Главное меню активировано внизу.',
+      Markup.keyboard([
+        ['💰 Профиль', '🎰 Казино'],
+        ['🛒 Магазин', '🎁 Daily'],
+        ['📊 Стата', '🏆 Топ'],
+        ['📦 Кейсы', '🏦 Кредит'],
+        ['💼 Работа']
+      ]).resize(),
+      { parse_mode: 'Markdown' }
+    )
+  }
+  return user
 }
+
 
 function createUser(id, username) {
   db.prepare(
@@ -353,16 +376,30 @@ bot.hears('💵 Погасить Кредит', (ctx) => {
 // РАЗДЕЛ: СИСТЕМА ТРУДОУСТРОЙСТВА LUDIX
 // ====================================================================
 
+// ====================================================================
+// РАЗДЕЛ: СИСТЕМА ТРУДОУСТРОЙСТВА LUDIX (С ЗАЩИТОЙ ОТ СПАМА)
+// ====================================================================
 bot.hears('💼 Работа', (ctx) => {
-  const user = getUser(String(ctx.from.id))
-  if (!user) return ctx.reply('Сначала введи /start')
+  const user = getUser(String(ctx.from.id), ctx)
+  if (!user) return // Смарт-запуск перехватит управление
 
-  // Награда растет с ростом уровня игрока
+  const now = Date.now()
+  const cooldown = 60000 // 60 секунд кулдауна в миллисекундах
+  const timeLeft = cooldown - (now - user.lastWork)
+
+  if (timeLeft > 0) {
+    const secondsLeft = Math.ceil(timeLeft / 1000)
+    return ctx.reply(`⏳ *ВЫ УСТАЛИ:* Вы не можете работать без остановки!\nОтдохните еще *${secondsLeft} сек.* перед следующей сменой.`, { parse_mode: 'Markdown' })
+  }
+
+  // Награда плавно растет с уровнем
   const reward = user.level * 150
 
-  db.prepare(
-    'UPDATE users SET balance = balance + ?, xp = xp + 15 WHERE telegramId = ?'
-  ).run(reward, String(ctx.from.id))
+  db.prepare(`
+    UPDATE users 
+    SET balance = balance + ?, xp = xp + 15, lastWork = ? 
+    WHERE telegramId = ?
+  `).run(reward, now, String(ctx.from.id))
 
   checkLevelUp(String(ctx.from.id))
   const updatedUser = getUser(String(ctx.from.id))
@@ -374,9 +411,10 @@ bot.hears('💼 Работа', (ctx) => {
 ⭐ Получено опыта: *+15 XP*
 💵 Текущий баланс: *${updatedUser.balance}$*
 ━━━━━━━━━━━━━━━━━━━━
-_(Награда и опыт растут вместе с вашим уровнем!)_
+_Следующая смена доступна через 60 секунд!_
   `, { parse_mode: 'Markdown' })
 })
+
 
 
 // СТАТА
