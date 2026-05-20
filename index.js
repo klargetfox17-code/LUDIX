@@ -322,11 +322,27 @@ bot.action('buy_farm', (ctx) => {
 
 // ИГРА СOINFLIP
 // ОБНОВЛЁННЫЙ COINFLIP (Ставка: 1000$)
+// ОБНОВЛЕННЫЙ COINFLIP
 bot.action('coinflip', (ctx) => {
   const user = getUser(String(ctx.from.id))
-  if (user.balance < 1000) return ctx.reply('💀 Недостаточно денег')
+  const bet = 1000
 
-  // Шанс 47.5% на победу. 52.5% — заведение забирает деньги (House Edge)
+  if (user.balance < bet) {
+    return ctx.reply('💀 Недостаточно денег. Ставка в Coinflip: 1000$')
+  }
+
+  // Разнообразные ответы на проигрыш в монетке
+  const coinLosePhrases = [
+    '💀 Монетка упала не той стороной. Ты проиграл.',
+    '🤡 Ой, кажется, твоя интуиция тебя подвела. Попробуй еще раз, чемпион.',
+    '💸 Деньги улетели в зрительный зал. Ставка слита.',
+    '📉 Увы и ах, фортуна повернулась к тебе спиной. Минус 1000$.',
+    '👹 Казино благодарит тебя за пожертвование.',
+    '🦴 Чистый проигрыш. Твой винстрик обнулился, лудоман.',
+    '🥶 Не угадал. Монетка безжалостна.'
+  ]
+
+  // Математический шанс 47.5% на победу
   const win = Math.random() < 0.475
 
   if (win) {
@@ -337,7 +353,10 @@ bot.action('coinflip', (ctx) => {
     `).run(String(ctx.from.id))
 
     checkLevelUp(String(ctx.from.id))
-    ctx.reply(`🪙 Монетка упала орлом!\n🤑 Вы выиграли 1000$!\n🔥 Винстрик: ${user.winstreak + 1}`)
+    
+    // Получаем обновленные данные пользователя для вывода актуального винстрика
+    const updatedUser = getUser(String(ctx.from.id))
+    ctx.reply(`🪙 Монетка упала как надо!\n🤑 Ты выиграл 1000$!\n🔥 Твой винстрик: ${updatedUser.winstreak}`)
   } else {
     db.prepare(`
       UPDATE users 
@@ -345,9 +364,11 @@ bot.action('coinflip', (ctx) => {
       WHERE telegramId = ?
     `).run(String(ctx.from.id))
 
-    ctx.reply('🪙 Монетка упала решкой!\n💀 Вы проиграли 1000$')
+    const randomCoinLoseText = coinLosePhrases[Math.floor(Math.random() * coinLosePhrases.length)]
+    ctx.reply(randomCoinLoseText)
   }
 })
+
 
 // ИГРА SLOTS
 // ОБНОВЛЕННЫЕ СЛОТЫ
