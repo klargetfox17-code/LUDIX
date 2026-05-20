@@ -270,11 +270,24 @@ async function runCoinflipMenu(ctx, betAmount) {
 }
 
 // СЛУШАТЕЛИ КНОПОК СТАВОК ДЛЯ МОНЕТКИ
+// ====================================================================
+// АКТИВАТОРЫ КНОПОК СТАВОК ДЛЯ ОБЕИХ ИГР
+// ====================================================================
+
+// СЛУШАТЕЛИ ДЛЯ МОНЕТКИ (COINFLIP) — ИСПОЛЬЗУЮТ МЕШКИ 💵
 bot.hears('💵 Ставка: 100$', (ctx) => runCoinflipMenu(ctx, 100))
 bot.hears('💵 Ставка: 500$', (ctx) => runCoinflipMenu(ctx, 500))
 bot.hears('💵 Ставка: 1000$', (ctx) => runCoinflipMenu(ctx, 1000))
 bot.hears('💵 Ставка: 5000$', (ctx) => runCoinflipMenu(ctx, 5000))
 bot.hears('🔥 Рискнуть Вобанк (All-In)', (ctx) => runCoinflipMenu(ctx, 'allin'))
+
+// СЛУШАТЕЛИ ДЛЯ СЛОТОВ (SLOTS) — ИСПОЛЬЗУЮТ КУБИКИ 🎲
+bot.hears('🎲 Ставка: 100$', (ctx) => runSlotsMenu(ctx, 100))
+bot.hears('🎲 Ставка: 500$', (ctx) => runSlotsMenu(ctx, 500))
+bot.hears('🎲 Ставка: 1000$', (ctx) => runSlotsMenu(ctx, 1000))
+bot.hears('🎲 Ставка: 5000$', (ctx) => runSlotsMenu(ctx, 5000))
+bot.hears('🔥 Крутануть Вобанк (All-In)', (ctx) => runSlotsMenu(ctx, 'allin'))
+
 
 
 
