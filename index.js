@@ -350,41 +350,103 @@ bot.action('coinflip', (ctx) => {
 })
 
 // ИГРА SLOTS
+// ОБНОВЛЕННЫЕ СЛОТЫ
 bot.action('slots', (ctx) => {
   const user = getUser(String(ctx.from.id))
+  const bet = 1000
 
-  if (user.balance < 1000) {
-    return ctx.reply('💀 Недостаточно денег')
+  if (user.balance < bet) {
+    return ctx.reply('💀 Недостаточно денег. Ставка в слотах: 1000$')
   }
 
-  const symbols = ['🍒', '💎', '🔥', '🍋']
+  // Массивы фраз для проигрышей (для разнообразия)
+  const losePhrases = [
+    '🎰 Барабаны крутятся, лавэха мутится... но не у тебя.',
+    '💀 Аппарат заглотил твои 1000$ и даже не подавился.',
+    '💸 Минус косарь. Но в следующий раз точно повезет, веришь?',
+    '🪐 Лудомания — вещь тонкая. Попробуй крутануть еще раз.',
+    '💩 Три в ряд? Нет, сегодня только три буквы. Ты проиграл.',
+    '📉 График твоего баланса стремительно летит вниз.',
+    '🤷‍♂️ Слотомашина сегодня не в настроении кормить игроков.'
+  ]
 
-  const a = symbols[Math.floor(Math.random() * symbols.length)]
-  const b = symbols[Math.floor(Math.random() * symbols.length)]
-  const c = symbols[Math.floor(Math.random() * symbols.length)]
+  // Скрытая математическая прокрутка (генерация исхода по весам)
+  const rand = Math.random() * 100
+  let a, b, c
+  let winAmount = 0
+  let isJackpot = false
 
-  const result = `${a} ${b} ${c}`
-
-  if (a === b && b === c) {
-    db.prepare(
-      'UPDATE users SET balance = balance + 5000 WHERE telegramId = ?'
-    ).run(String(ctx.from.id))
-
-    ctx.reply(`
-🎰 ${result}
-
-🤑 JACKPOT +5000$
-
-🚨 HUGE WIN
-`)
+  if (rand < 2.0) { 
+    // 2% ШАНС: ТОП ДЖЕКПОТ (Бриллианты)
+    a = b = c = '💎'
+    winAmount = 15000 // x15
+    isJackpot = true
+  } else if (rand < 5.0) { 
+    // 3% ШАНС: ОГНЕННЫЙ ДЖЕКПОТ (Огонь)
+    a = b = c = '🔥'
+    winAmount = 7000 // x7
+    isJackpot = true
+  } else if (rand < 9.5) { 
+    // 4.5% ШАНС: СРЕДНИЙ ВЫИГРЫШ (Вишни)
+    a = b = c = '🍒'
+    winAmount = 4000 // x4
+  } else if (rand < 15.0) { 
+    // 5.5% ШАНС: МЕЛКИЙ ВЫИГРЫШ (Лимоны)
+    a = b = c = '🍋'
+    winAmount = 2000 // x2
+  } else if (rand < 45.0) {
+    // 30% ШАНС: ЭФФЕКТ "ПОЧТИ ВЫИГРАЛ" (Near Miss)
+    // Два первых символа совпадают, создавая иллюзию близкой победы!
+    const symbols = ['🍒', '💎', '🔥', '🍋']
+    a = b = symbols[Math.floor(Math.random() * symbols.length)]
+    // Третий символ гарантированно другой
+    do {
+      c = symbols[Math.floor(Math.random() * symbols.length)]
+    } while (c === a)
   } else {
-    db.prepare(
-      'UPDATE users SET balance = balance - 1000 WHERE telegramId = ?'
-    ).run(String(ctx.from.id))
+    // 55% ШАНС: Абсолютный хаос (все символы разные или не создают комбинацию)
+    const symbols = ['🍒', '💎', '🔥', '🍋']
+    a = symbols[Math.floor(Math.random() * symbols.length)]
+    b = symbols[Math.floor(Math.random() * symbols.length)]
+    c = symbols[Math.floor(Math.random() * symbols.length)]
+    // Если случайно сгенерировались 3 одинаковых, принудительно ломаем
+    if (a === b && b === c) {
+      c = a === '🍒' ? '💎' : '🍒'
+    }
+  }
 
-    ctx.reply(`🎰 ${result}\n\n💀 Проигрыш`) 
+  const resultLine = `${a} ｜ ${b} ｜ ${c}`
+
+  if (winAmount > 0) {
+    // Расчет чистого профита
+    const netProfit = winAmount - bet
+
+    db.prepare(`
+      UPDATE users 
+      SET balance = balance + ?, xp = xp + 20, totalWon = totalWon + ? 
+      WHERE telegramId = ?
+    `).run(netProfit, winAmount, String(ctx.from.id))
+
+    checkLevelUp(String(ctx.from.id))
+
+    if (isJackpot) {
+      ctx.reply(`🎰 ${resultLine}\n\n🔥 СУМАСШЕДШИЙ ДЖЕКПОТ! 🔥\n🤑 Ты выиграл +${winAmount}$!`)
+    } else {
+      ctx.reply(`🎰 ${resultLine}\n\n🤑 Поздравляем!\n💰 Выигрыш: +${winAmount}$ (Чистый профит: +${netProfit}$)`)
+    }
+  } else {
+    // Проигрыш
+    db.prepare(`
+      UPDATE users 
+      SET balance = balance - ?, xp = xp + 5, totalLost = totalLost + ? 
+      WHERE telegramId = ?
+    `).run(bet, bet, String(ctx.from.id))
+
+    const randomLoseText = losePhrases[Math.floor(Math.random() * losePhrases.length)]
+    ctx.reply(`🎰 ${resultLine}\n\n${randomLoseText}\n📉 Ставка 1000$ ушла заведению.`)
   }
 })
+
 // ОБЫЧНЫЙ КЕЙС
 
 // ПРИМЕР ДЛЯ КЕЙСА (Стоимость: 2500$)
