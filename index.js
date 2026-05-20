@@ -2,12 +2,44 @@ const { Telegraf, Markup } = require('telegraf')
 const Database = require('better-sqlite3')
 require('dotenv').config()
 
-// Чистая инициализация без лишних скобок
 const token = process.env.BOT_TOKEN || '8721680626:AAFuGPHaUhZfXQeRQsEQXcNvYG5uDzWIG5s'
 const bot = new Telegraf(token)
 const db = new Database('game.db')
-// ==========================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (ОБЯЗАТЕЛЬНО ТУТ)
+
+// ИНИЦИАЛИЗАЦИЯ ТАБЛИЦЫ
+db.prepare(`
+CREATE TABLE IF NOT EXISTS users (
+  telegramId TEXT PRIMARY KEY,
+  username TEXT,
+  balance INTEGER DEFAULT 1000,
+  income INTEGER DEFAULT 20,
+  lastDaily INTEGER DEFAULT 0,
+  xp INTEGER DEFAULT 0,
+  level INTEGER DEFAULT 1,
+  winstreak INTEGER DEFAULT 0,
+  totalWon INTEGER DEFAULT 0,
+  totalLost INTEGER DEFAULT 0,
+  casesOpened INTEGER DEFAULT 0,
+  debt INTEGER DEFAULT 0,
+  debtTimer INTEGER DEFAULT 0,
+  blacklist INTEGER DEFAULT 0,
+  credits INTEGER DEFAULT 0,
+  allTimeProfit INTEGER DEFAULT 0
+)
+`).run()
+
+// Авто-добавление колонок для старых пользователей (если база данных уже создана)
+const columns = [
+  'xp DEFAULT 0', 'level DEFAULT 1', 'winstreak DEFAULT 0', 
+  'totalWon DEFAULT 0', 'totalLost DEFAULT 0', 'casesOpened DEFAULT 0', 
+  'debt DEFAULT 0', 'debtTimer DEFAULT 0', 'blacklist DEFAULT 0', 
+  'credits DEFAULT 0', 'allTimeProfit DEFAULT 0'
+]
+for (const col of columns) {
+  try { db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run() } catch (e) {}
+}
+
+// ГЛОБАЛЬНЫЕ ФУНКЦИИ ИГРЫ
 function getUser(id) {
   return db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
 }
@@ -31,43 +63,8 @@ function checkLevelUp(id) {
   }
   return false
 }
-// ==========================================
 
-db.prepare(`
-CREATE TABLE IF NOT EXISTS users (
-  telegramId TEXT PRIMARY KEY,
-  username TEXT,
-  balance INTEGER DEFAULT 1000,
-  income INTEGER DEFAULT 20,
-  lastDaily INTEGER DEFAULT 0,
-  xp INTEGER DEFAULT 0,
-  level INTEGER DEFAULT 1,
-  winstreak INTEGER DEFAULT 0,
-  totalWon INTEGER DEFAULT 0,
-  totalLost INTEGER DEFAULT 0
-)
-`).run()
-
-// Безопасное добавление колонок для старых пользователей (без кучи блоков try/catch)
-const columns = [
-  'xp DEFAULT 0', 
-  'level DEFAULT 1', 
-  'winstreak DEFAULT 0', 
-  'totalWon DEFAULT 0', 
-  'totalLost DEFAULT 0',
-  'casesOpened INTEGER DEFAULT 0',
-  'debt INTEGER DEFAULT 0',
-  'debtTimer INTEGER DEFAULT 0',
-  'blacklist INTEGER DEFAULT 0',
-  'credits INTEGER DEFAULT 0',
-  'allTimeProfit INTEGER DEFAULT 0'
-]
-
-for (const col of columns) {
-  try { db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run() } catch (e) {}
-}
-
-// START — Постоянное меню на кнопках
+// ГЛАВНОЕ МЕНЮ (СТАРТ)
 bot.start((ctx) => {
   const id = String(ctx.from.id)
   const username = ctx.from.username || 'player'
@@ -75,16 +72,29 @@ bot.start((ctx) => {
   createUser(id, username)
 
   ctx.reply(
-    '💸 ДОБРО ПОЖАЛОВАТЬ В LUDIX',
-   Markup.keyboard([
-  ['💰 Профиль', '🎰 Казино'],
-  ['🛒 Магазин', '🎁 Daily'],
-  ['🏆 Топ', '🏦 Кредит'],
-  ['💳 Погасить', '📊 Стата'],
-  ['🎁 Кейсы']
-]).resize()
+    '💸 ДОБРО ПОЖАЛОВАТЬ В ИГРУ LUDIX',
+    Markup.keyboard([
+      ['💰 Профиль', '🎰 Казино'],
+      ['🛒 Магазин', '🎁 Daily'],
+      ['📊 Стата', '🏆 Топ'],
+      ['📦 Кейсы']
+    ]).resize()
   )
 })
+
+// ОБРАБОТЧИК КНОПКИ НАЗАД В ГЛАВНОЕ МЕНЮ
+bot.hears('↩️ Назад в меню', (ctx) => {
+  ctx.reply(
+    '↩️ Вы вернулись в главное меню LUDIX',
+    Markup.keyboard([
+      ['💰 Профиль', '🎰 Казино'],
+      ['🛒 Магазин', '🎁 Daily'],
+      ['📊 Стата', '🏆 Топ'],
+      ['📦 Кейсы']
+    ]).resize()
+  )
+})
+
 
 // ОБРАБОТКА ПОСТОЯННЫХ КНОПОК (МЕНЮ)
 
