@@ -179,24 +179,56 @@ _Выберите размер вашей ставки кнопками ниже
     ['🎰 Вернуться в Казино', '↩️ Назад в меню']
   ]).resize())
 })
-bot.hears('🎲 Слоты (до x15)', (ctx) => {
+// АНИМИРОВАННАЯ ИГРА В СЛОТЫ ЧЕРЕЗ ТЕКСТОВУЮ КНОПКУ
+bot.hears('🎲 Slots 1000$', async (ctx) => {
   const user = getUser(String(ctx.from.id))
-  if (!user) return
 
-  ctx.reply(
-    `🎰 *РЕЖИМ: СЛОТ-МАШИНА LUDIX*\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-    `💵 Ваш баланс: *${user.balance}$*\n` +
-    `📈 RTP автомата: *94%* (Умные веса барабанов)\n\n` +
-    `_Выберите размер вашей ставки кнопками ниже:_`,
-    Markup.keyboard([
-      ['💵 Ставка: 100$', '💵 Ставка: 500$'],
-      ['💵 Ставка: 1000$', '💵 Ставка: 5000$'],
-      ['🔥 Крутануть Вабанк (All-In)'],
-      ['🔙 Вернуться в Казино', '↩️ Назад в меню']
-    ]).resize()
-  )
+  if (!user || user.balance < 1000) {
+    return ctx.reply('💀 Недостаточно денег для прокрута!')
+  }
+
+  // 1. Отправляем стартовое сообщение анимации
+  const message = await ctx.reply('🎰 *Крутим барабаны...*\n[ ⏳ | ⏳ | ⏳ ]', { parse_mode: 'Markdown' })
+
+  const symbols = ['🍒', '💎', '🔥', '🍋']
+  
+  // 2. Имитируем вращение через 400 миллисекунд
+  setTimeout(async () => {
+    const r1 = symbols[Math.floor(Math.random() * symbols.length)]
+    const r2 = symbols[Math.floor(Math.random() * symbols.length)]
+    const r3 = symbols[Math.floor(Math.random() * symbols.length)]
+    await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `🎰 *Барабаны вращаются...*\n[ ${r1} | ${r2} | ${r3} ]`, { parse_mode: 'Markdown' }).catch(() => {})
+  }, 400)
+
+  // 3. Фиксируем результат через 900 миллисекунд
+  setTimeout(async () => {
+    const a = symbols[Math.floor(Math.random() * symbols.length)]
+    const b = symbols[Math.floor(Math.random() * symbols.length)]
+    const c = symbols[Math.floor(Math.random() * symbols.length)]
+    const result = `[ ${a} | ${b} | ${c} ]`
+
+    if (a === b && b === c) {
+      db.prepare(`
+        UPDATE users 
+        SET balance = balance + 5000, xp = xp + 30, winstreak = winstreak + 1, totalWon = totalWon + 5000 
+        WHERE telegramId = ?
+      `).run(String(ctx.from.id))
+
+      checkLevelUp(String(ctx.from.id))
+
+      await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `🎰 *РЕЗУЛЬТАТ:* ${result}\n\n🤑 *JACKPOT!* Вы выиграли *5000$*!\n🔥 Винстрик растет!`, { parse_mode: 'Markdown' }).catch(() => {})
+    } else {
+      db.prepare(`
+        UPDATE users 
+        SET balance = balance - 1000, xp = xp + 5, winstreak = 0, totalLost = totalLost + 1000 
+        WHERE telegramId = ?
+      `).run(String(ctx.from.id))
+
+      await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `🎰 *РЕЗУЛЬТАТ:* ${result}\n\n💀 Увы, это проигрыш (*-1000$*).`, { parse_mode: 'Markdown' }).catch(() => {})
+    }
+  }, 900)
 })
+
 
 
 
