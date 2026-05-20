@@ -180,58 +180,121 @@ _Выберите размер вашей ставки кнопками ниже
   ]).resize())
 })
 // АНИМИРОВАННАЯ ИГРА В СЛОТЫ ЧЕРЕЗ ТЕКСТОВУЮ КНОПКУ
-bot.hears('🎲 Slots 1000$', async (ctx) => {
+// МЕНЮ СЛОТОВ
+bot.hears('🎲 Слоты (до x15)', (ctx) => {
+  ctx.reply(
+    '🎰 ВЫБЕРИ СТАВКУ ДЛЯ СЛОТОВ',
+    Markup.keyboard([
+      ['🎲 Ставка: 100$', '🎲 Ставка: 500$'],
+      ['🎲 Ставка: 1000$', '🎲 Ставка: 5000$'],
+      ['🔥 Крутануть Вобанк (All-In)'],
+      ['🎰 Вернуться в Казино']
+    ]).resize()
+  )
+})
+
+// ДВИЖОК СЛОТОВ
+async function runSlotsMenu(ctx, betAmount) {
   const user = getUser(String(ctx.from.id))
 
-  if (!user || user.balance < 1000) {
-    return ctx.reply('💀 Недостаточно денег для прокрута!')
+  if (!user) return ctx.reply('Сначала введи /start')
+
+  const bet = betAmount === 'allin'
+    ? user.balance
+    : betAmount
+
+  if (bet <= 0 || user.balance < bet) {
+    return ctx.reply('💀 Недостаточно денег')
   }
 
-  // 1. Отправляем стартовое сообщение анимации
-  const message = await ctx.reply('🎰 *Крутим барабаны...*\n[ ⏳ | ⏳ | ⏳ ]', { parse_mode: 'Markdown' })
+  const msg = await ctx.reply(
+    '🎰 Крутим слоты...\n[ ⏳ | ⏳ | ⏳ ]'
+  )
 
   const symbols = ['🍒', '💎', '🔥', '🍋']
-  
-  // 2. Имитируем вращение через 400 миллисекунд
-  setTimeout(async () => {
-    const r1 = symbols[Math.floor(Math.random() * symbols.length)]
-    const r2 = symbols[Math.floor(Math.random() * symbols.length)]
-    const r3 = symbols[Math.floor(Math.random() * symbols.length)]
-    await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `🎰 *Барабаны вращаются...*\n[ ${r1} | ${r2} | ${r3} ]`, { parse_mode: 'Markdown' }).catch(() => {})
-  }, 400)
 
-  // 3. Фиксируем результат через 900 миллисекунд
+  // АНИМАЦИЯ
+  setTimeout(async () => {
+    const s1 = symbols[Math.floor(Math.random() * symbols.length)]
+    const s2 = symbols[Math.floor(Math.random() * symbols.length)]
+    const s3 = symbols[Math.floor(Math.random() * symbols.length)]
+
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      msg.message_id,
+      null,
+      `🎰 Крутится...\n[ ${s1} | ${s2} | ${s3} ]`
+    ).catch(() => {})
+  }, 500)
+
+  // ФИНАЛ
   setTimeout(async () => {
     const a = symbols[Math.floor(Math.random() * symbols.length)]
     const b = symbols[Math.floor(Math.random() * symbols.length)]
     const c = symbols[Math.floor(Math.random() * symbols.length)]
+
     const result = `[ ${a} | ${b} | ${c} ]`
 
+    let multiplier = 0
+
+    // x5
     if (a === b && b === c) {
+      multiplier = 5
+    }
+
+    // x2
+    else if (a === b || b === c || a === c) {
+      multiplier = 2
+    }
+
+    // ВЫИГРЫШ
+    if (multiplier > 0) {
+      const win = bet * multiplier
+
       db.prepare(`
-        UPDATE users 
-        SET balance = balance + 5000, xp = xp + 30, winstreak = winstreak + 1, totalWon = totalWon + 5000 
+        UPDATE users
+        SET balance = balance + ?,
+            totalWon = totalWon + ?,
+            winstreak = winstreak + 1,
+            xp = xp + 20
         WHERE telegramId = ?
-      `).run(String(ctx.from.id))
+      `).run(win, win, String(ctx.from.id))
 
       checkLevelUp(String(ctx.from.id))
 
-      await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `🎰 *РЕЗУЛЬТАТ:* ${result}\n\n🤑 *JACKPOT!* Вы выиграли *5000$*!\n🔥 Винстрик растет!`, { parse_mode: 'Markdown' }).catch(() => {})
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        msg.message_id,
+        null,
+        `🎰 ${result}
+
+🤑 Выигрыш: +${win}$ (x${multiplier})`
+      ).catch(() => {})
+
     } else {
+
+      // ПРОИГРЫШ
       db.prepare(`
-        UPDATE users 
-        SET balance = balance - 1000, xp = xp + 5, winstreak = 0, totalLost = totalLost + 1000 
+        UPDATE users
+        SET balance = balance - ?,
+            totalLost = totalLost + ?,
+            winstreak = 0,
+            xp = xp + 5
         WHERE telegramId = ?
-      `).run(String(ctx.from.id))
+      `).run(bet, bet, String(ctx.from.id))
 
-      await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `🎰 *РЕЗУЛЬТАТ:* ${result}\n\n💀 Увы, это проигрыш (*-1000$*).`, { parse_mode: 'Markdown' }).catch(() => {})
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        msg.message_id,
+        null,
+        `🎰 ${result}
+
+💀 Проигрыш: -${bet}$`
+      ).catch(() => {})
     }
-  }, 900)
-})
 
-
-
-
+  }, 1300)
+}
 bot.hears('🎰 Вернуться в Казино', (ctx) => {
   ctx.reply('🎰 Возврат в игровой зал...', Markup.keyboard([
     ['🪙 Монетка (x2)', '🎲 Слоты (до x15)'],
