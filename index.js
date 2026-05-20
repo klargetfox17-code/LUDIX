@@ -238,20 +238,26 @@ bot.hears('🛒 Магазин', (ctx) => {
 })
 
 // 5. ЕЖЕДНЕВНЫЙ БОНУС
+// НАЙДИТЕ И ЗАМЕНИТЕ В bot.hears('🎁 Daily', ...)
 bot.hears('🎁 Daily', (ctx) => {
   const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
+  
   const now = Date.now()
-
   if (now - user.lastDaily < 86400000) {
-    return ctx.reply('⏳ Daily уже забран')
+    return ctx.reply('⏳ Daily бонус можно забрать раз в 24 часа!')
   }
 
-  db.prepare(
-    'UPDATE users SET balance = balance + 5000, lastDaily = ? WHERE telegramId = ?'
-  ).run(now, String(ctx.from.id))
+  // Динамическая награда зависит от уровня
+  const reward = 1000 + (user.level * 200)
 
-  ctx.reply('🎁 Ты получил 5000$')
+  db.prepare(
+    'UPDATE users SET balance = balance + ?, lastDaily = ? WHERE telegramId = ?'
+  ).run(reward, now, String(ctx.from.id))
+
+  ctx.reply(`🎁 Вы забрали ежедневный бонус!\n💰 Награда: ${reward}$ (бонус увеличивается с ростом уровня)`)
 })
+
 // КЕЙСЫ
 
 bot.hears('🎁 Кейсы', (ctx) => {
