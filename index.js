@@ -403,111 +403,47 @@ bot.action('slots', (ctx) => {
 })
 // ОБЫЧНЫЙ КЕЙС
 
-bot.action('case_normal', (ctx) => {
+// ПРИМЕР ДЛЯ КЕЙСА (Стоимость: 2500$)
+bot.action('open_case', (ctx) => {
   const user = getUser(String(ctx.from.id))
+  const price = 2500
+  if (user.balance < price) return ctx.reply('💀 Недостаточно денег для открытия кейса!')
 
-  if(user.balance < 2500) {
-    return ctx.reply('💀 Недостаточно денег')
+  // Математические шансы (в сумме 100)
+  // Игрок чаще получает "около-окупаемые" призы, создавая иллюзию близости к победе
+  const rand = Math.random() * 100
+
+  let winAmount = 0
+  let tier = ''
+
+  if (rand < 40) {         // 40% шанс - мелкий утешительный приз (минус для банка)
+    winAmount = Math.floor(Math.random() * 800) + 400 // 400$ - 1200$
+    tier = '⚪ ОБЫЧНЫЙ'
+  } else if (rand < 75) {  // 35% шанс - почти окупился (небольшой минус)
+    winAmount = Math.floor(Math.random() * 1000) + 1400 // 1400$ - 2400$
+    tier = '🟢 НЕОБЫЧНЫЙ'
+  } else if (rand < 93) {  // 18% шанс - Удвоение (окупился в небольшой плюс)
+    winAmount = Math.floor(Math.random() * 1500) + 3000 // 3000$ - 4500$
+    tier = '🔵 РЕДКИЙ'
+  } else if (rand < 99) {  // 6% шанс - Крупный выигрыш
+    winAmount = Math.floor(Math.random() * 4000) + 6000 // 6000$ - 10000$
+    tier = '🟣 ЭПИЧЕСКИЙ'
+  } else {                 // 1% шанс - СВЕРХДОХОД (ДЖЕКПОТ)
+    winAmount = 25000
+    tier = '🔥 ЛЕГЕНДАРНЫЙ ДЖЕКПОТ'
   }
 
-  db.prepare(`
-    UPDATE users
-    SET balance = balance - 2500,
-    casesOpened = casesOpened + 1
-    WHERE telegramId = ?
-  `).run(String(ctx.from.id))
-
-  const rewards = [1000, 2500, 5000, 10000, 25000]
-  const reward = rewards[Math.floor(Math.random() * rewards.length)]
+  const profit = winAmount - price
 
   db.prepare(`
-    UPDATE users
-    SET balance = balance + ?,
-    allTimeProfit = allTimeProfit + ?
+    UPDATE users 
+    SET balance = balance + ?, casesOpened = casesOpened + 1, allTimeProfit = allTimeProfit + ? 
     WHERE telegramId = ?
-  `).run(reward, reward, String(ctx.from.id))
+  `).run(profit, profit, String(ctx.from.id))
 
-  ctx.reply(`
-📦 КЕЙС ОТКРЫТ
-
-💵 Дроп: ${reward}$
-
-${reward >= 10000 ? '🔥 HUGE WIN' : '😐 Нормально'}
-  `)
+  ctx.reply(`📦 Вы открыли кейс за ${price}$\n\nРанг: ${tier}\n💰 Выпало: ${winAmount}$\n${profit >= 0 ? `📈 Чистый профит: +${profit}$` : `📉 Убыток: ${profit}$`}`)
 })
-// РИСКОВАННЫЙ КЕЙС
 
-bot.action('case_risky', (ctx) => {
-  const user = getUser(String(ctx.from.id))
-
-  if(user.balance < 10000) {
-    return ctx.reply('💀 Недостаточно денег')
-  }
-
-  db.prepare(`
-    UPDATE users
-    SET balance = balance - 10000,
-    casesOpened = casesOpened + 1
-    WHERE telegramId = ?
-  `).run(String(ctx.from.id))
-
-  const rewards = [0, 5000, 15000, 50000, 100000]
-
-  const reward = rewards[Math.floor(Math.random() * rewards.length)]
-
-  db.prepare(`
-    UPDATE users
-    SET balance = balance + ?
-    WHERE telegramId = ?
-  `).run(reward, String(ctx.from.id))
-
-  ctx.reply(`
-🔥 РИСКОВАННЫЙ КЕЙС
-
-💵 ${reward}$
-
-${reward === 0 ? '🤡 СКАМ' : '🚨 ЖЕСТКИЙ ДОП'}
-  `)
-})
-// ЛЕГЕНДАРНЫЙ КЕЙС
-
-bot.action('case_legend', (ctx) => {
-  const user = getUser(String(ctx.from.id))
-
-  if(user.balance < 50000) {
-    return ctx.reply('💀 Ты слишком бедный')
-  }
-
-  db.prepare(`
-    UPDATE users
-    SET balance = balance - 50000,
-    casesOpened = casesOpened + 1
-    WHERE telegramId = ?
-  `).run(String(ctx.from.id))
-
-  const chance = Math.random()
-
-  let reward = 0
-
-  if(chance > 0.95) reward = 1000000
-  else if(chance > 0.85) reward = 250000
-  else if(chance > 0.65) reward = 100000
-  else reward = 10000
-
-  db.prepare(`
-    UPDATE users
-    SET balance = balance + ?
-    WHERE telegramId = ?
-  `).run(reward, String(ctx.from.id))
-
-  ctx.reply(`
-💎 ЛЕГЕНДАРНЫЙ КЕЙС
-
-🚨 ВЫБИТО: ${reward}$
-
-${reward >= 250000 ? '🚨🚨🚨 JACKPOT' : '🤑 Неплохо'}
-  `)
-})
 // ПРОСРОЧКА КРЕДИТА
 
 setInterval(() => {
