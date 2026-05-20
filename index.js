@@ -101,67 +101,164 @@ bot.hears('↩️ Назад в меню', (ctx) => {
 // 1. ПРОФИЛЬ
 bot.hears('💰 Профиль', (ctx) => {
   const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
 
   ctx.reply(`
-👤 @${user.username}
+👤 *ПРОФИЛЬ ИГРОКА LUDIX* @${user.username}
+━━━━━━━━━━━━━━━━━━━━
+💵 Баланс: *${user.balance}$*
+📈 Доход: *${user.income}$/мин*
 
-💵 Баланс: ${user.balance}$
-📈 Доход: ${user.income}$/мин
-
-🏆 Уровень: ${user.level}
-⭐ XP: ${user.xp} / ${user.level * 100}
-🔥 Винстрик: ${user.winstreak}
-  `)
+🏆 Уровень: *${user.level}*
+⭐ Опыт (XP): *${user.xp} / ${user.level * 100}*
+🔥 Винстрик: *${user.winstreak}*
+━━━━━━━━━━━━━━━━━━━━
+  `, { parse_mode: 'Markdown' })
 })
+
 
 // 2. КАЗИНО (Инлайн кнопки для под-меню игр)
+// 2. КАЗИНО (ПЕРЕКЛЮЧЕНИЕ НА МЕНЮ ИГР ВНИЗУ ЭКРАНА)
 bot.hears('🎰 Казино', (ctx) => {
-  ctx.reply(
-    '🎰 КАЗИНО',
-    Markup.inlineKeyboard([
-      [Markup.button.callback('🪙 Coinflip 1000$', 'coinflip')],
-      [Markup.button.callback('🎲 Slots 1000$', 'slots')]
-    ])
-  )
+  const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
+
+  ctx.reply(`
+🎰 *ДОБРО ПОЖАЛОВАТЬ В КАЗИНО LUDIX* 🎰
+━━━━━━━━━━━━━━━━━━━━
+💵 Ваш баланс: *${user.balance}$*
+
+Вы перешли в меню выбора игр. Кнопки управления теперь внизу экрана!
+  `, Markup.keyboard([
+    ['🪙 Монетка (x2)', '🎲 Слоты (до x15)'],
+    ['↩️ Назад в меню']
+  ]).resize())
 })
 
-// 3. ТОП
-bot.hears('🏆 Топ', (ctx) => {
-  const users = db.prepare(
-    'SELECT * FROM users ORDER BY balance DESC LIMIT 10'
-  ).all()
+// ВЫБОР СТАВОК ДЛЯ МОНЕТКИ (COINFLIP)
+bot.hears('🪙 Монетка (x2)', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+  ctx.reply(`
+🪙 *РЕЖИМ: COINFLIP (МОНЕТКА)*
+━━━━━━━━━━━━━━━━━━━━
+💵 Баланс: *${user.balance}$*
+🔥 Винстрик: *${user.winstreak}*
+Шанс победы: *47.5%* (House Edge: 5.25%)
 
-  let text = '🏆 *ТОП-10 ИГРОКОВ DOPELINE:*\n\n'
+_Выберите размер вашей ставки кнопками ниже:_
+  `, Markup.keyboard([
+    ['💵 Ставка: 100$', '💵 Ставка: 500$'],
+    ['💵 Ставка: 1000$', '💵 Ставка: 5000$'],
+    ['🔥 Рискнуть Вобанк (All-In)'],
+    ['🎰 Вернуться в Казино', '↩️ Назад в меню']
+  ]).resize())
+})
+
+bot.hears('🎰 Вернуться в Казино', (ctx) => {
+  ctx.reply('🎰 Возврат в игровой зал...', Markup.keyboard([
+    ['🪙 Монетка (x2)', '🎲 Слоты (до x15)'],
+    ['↩️ Назад в меню']
+  ]).resize())
+})
+
+// СИСТЕМНЫЙ ДВИЖОК МОНЕТКИ (ОБРАБОТКА И АНИМАЦИЯ СТАВОК)
+async function runCoinflipMenu(ctx, betAmount) {
+  const user = getUser(String(ctx.from.id))
+  const bet = betAmount === 'allin' ? user.balance : betAmount
+
+  if (bet < 10) return ctx.reply('❌ Минимальная ставка — 10$')
+  if (user.balance < bet || user.balance <= 0) {
+    return ctx.reply(`💀 Недостаточно денег! Ваш баланс: ${user.balance}$`)
+  }
+
+  const losePhrases = [
+    'Казино LUDIX благодарит тебя за пожертвование.',
+    'Твой винстрик с грохотом обнулился, лудоман.',
+    'Не угадал. Монетка сегодня безжалостна.',
+    'Минус кэш. Но в следующий раз точно повезет!'
+  ]
+
+  const message = await ctx.reply('🪙 *Монетка подброшена...* \n🌀 _Крутится-вертится в воздухе..._', { parse_mode: 'Markdown' })
+
+  setTimeout(async () => {
+    const win = Math.random() < 0.475 // Умный House Edge 5%
+
+    if (win) {
+      db.prepare(`
+        UPDATE users SET balance = balance + ?, xp = xp + 15, winstreak = winstreak + 1, totalWon = totalWon + ? WHERE telegramId = ?
+      `).run(bet, bet, String(ctx.from.id))
+      checkLevelUp(String(ctx.from.id))
+      const updatedUser = getUser(String(ctx.from.id))
+
+      await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `
+🪙 *РЕЗУЛЬТАТ: ОРЕЛ!*
+━━━━━━━━━━━━━━━━━━━━
+🤑 Ты выиграл: *+${bet}$*
+💵 Твой баланс: *${updatedUser.balance}$*
+🔥 Текущий винстрик: *${updatedUser.winstreak}*
+━━━━━━━━━━━━━━━━━━━━
+      `, { parse_mode: 'Markdown' })
+    } else {
+      db.prepare(`
+        UPDATE users SET balance = balance - ?, xp = xp + 5, winstreak = 0, totalLost = totalLost + ? WHERE telegramId = ?
+      `).run(bet, bet, String(ctx.from.id))
+      const updatedUser = getUser(String(ctx.from.id))
+      const randText = losePhrases[Math.floor(Math.random() * losePhrases.length)]
+
+      await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `
+🪙 *РЕЗУЛЬТАТ: РЕШКА!*
+━━━━━━━━━━━━━━━━━━━━
+📉 Ты проиграл: *-${bet}$*
+💵 Твой баланс: *${updatedUser.balance}$*
+❌ _${randText}_
+━━━━━━━━━━━━━━━━━━━━
+      `, { parse_mode: 'Markdown' })
+    }
+  }, 1200)
+}
+
+// СЛУШАТЕЛИ КНОПОК СТАВОК ДЛЯ МОНЕТКИ
+bot.hears('💵 Ставка: 100$', (ctx) => runCoinflipMenu(ctx, 100))
+bot.hears('💵 Ставка: 500$', (ctx) => runCoinflipMenu(ctx, 500))
+bot.hears('💵 Ставка: 1000$', (ctx) => runCoinflipMenu(ctx, 1000))
+bot.hears('💵 Ставка: 5000$', (ctx) => runCoinflipMenu(ctx, 5000))
+bot.hears('🔥 Рискнуть Вобанк (All-In)', (ctx) => runCoinflipMenu(ctx, 'allin'))
+
+
+// 3. ТОП
+// 3. ТОП-10 ИГРОКОВ LUDIX
+bot.hears('🏆 Топ', (ctx) => {
+  const users = db.prepare('SELECT * FROM users ORDER BY balance DESC LIMIT 10').all()
+  let text = '🏆 *ТОП-10 БОГАТЕЕВ LUDIX*\n━━━━━━━━━━━━━━━━━━━━\n\n'
   
   users.forEach((user, index) => {
-    text += `${index + 1}. @${user.username} — *${user.balance}$*\n`
+    let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🔹'
+    text += `${medal} ${index + 1}. @${user.username} — *${user.balance}$*\n`
   })
+  text += '\n━━━━━━━━━━━━━━━━━━━━'
 
   ctx.reply(text, { parse_mode: 'Markdown' })
 })
+
 // КРЕДИТ
 
+// 4. КРЕДИТНАЯ СИСТЕМА И РАБОТА LUDIX
 bot.hears('🏦 Кредит', (ctx) => {
   const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
 
-  if(user.blacklist === 1) {
-    return ctx.reply('🚫 Банк внес тебя в черный список')
+  if (user.blacklist === 1) {
+    return ctx.reply('❌ *БАНК LUDIX:* Вы находитесь в чёрном списке за неуплату кредита! Доступ к займам заблокирован.', { parse_mode: 'Markdown' })
   }
 
-  if(user.debt > 0) {
-    return ctx.reply(`
-💀 У тебя уже есть кредит
-
-📉 Долг: ${user.debt}$
-
-Верни сначала его
-    `)
+  if (user.debt > 0) {
+    return ctx.reply(`🏦 *БАНК LUDIX:* У вас уже есть активный кредит!\n💵 Ваш долг: *${user.debt}$*\n_Погасите его перед взятием нового._`, { parse_mode: 'Markdown' })
   }
 
-  const creditAmount = 10000
-  const finalDebt = 15000
+  const creditAmount = user.level * 5000
+  const finalDebt = creditAmount * 1.2
 
-    db.prepare(`
+  db.prepare(`
     UPDATE users
     SET
       balance = balance + ?,
@@ -176,412 +273,293 @@ bot.hears('🏦 Кредит', (ctx) => {
     String(ctx.from.id)
   )
 
-
   ctx.reply(`
-🏦 КРЕДИТ ОДОБРЕН
-
-💵 Получено: ${creditAmount}$
-
-📉 Вернуть нужно: ${finalDebt}$
-
-⏳ Срок: 24 часа
-
-🤡 удачи не слить это за 4 минуты
-  `)
+🏦 *КРЕДИТ В LUDIX УСПЕШНО ОДОБРЕН*
+━━━━━━━━━━━━━━━━━━━━
+💰 Получено на баланс: *+${creditAmount}$*
+📉 Сумма к возврату (с учетом %): *${finalDebt}$*
+⏳ Срок на погашение: *10 минут*
+━━━━━━━━━━━━━━━━━━━━
+_Если вы не вернете долг вовремя, банк внесет вас в черный список и заблокирует пассивный доход!_
+  `, { parse_mode: 'Markdown' })
 })
-bot.hears('💳 Погасить', (ctx) => {
+
+// ПОГАШЕНИЕ КРЕДИТА
+bot.hears('💵 Погасить кредит', (ctx) => {
   const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
 
-  if(user.debt <= 0) {
-    return ctx.reply('✅ У тебя нет долгов')
+  if (user.debt === 0) {
+    return ctx.reply('🏦 *БАНК LUDIX:* У вас нет активных задолженностей.')
   }
 
-  if(user.balance < user.debt) {
-    return ctx.reply(`
-💀 Недостаточно денег
-
-📉 Долг: ${user.debt}$
-    `)
+  if (user.balance < user.debt) {
+    return ctx.reply(`❌ *БАНК LUDIX:* Недостаточно денег для полного погашения долга!\n💵 Ваш долг: *${user.debt}$*\n💰 Ваш баланс: *${user.balance}$*`, { parse_mode: 'Markdown' })
   }
 
-  db.prepare(`
-    UPDATE users
-    SET
-      balance = balance - debt,
-      debt = 0
-    WHERE telegramId = ?
-  `).run(String(ctx.from.id))
+  db.prepare(
+    'UPDATE users SET balance = balance - debt, debt = 0, debtTimer = 0, blacklist = 0 WHERE telegramId = ?'
+  ).run(String(ctx.from.id))
 
   ctx.reply(`
-✅ КРЕДИТ ПОГАШЕН
-
-🏦 Банк снова тебе доверяет
-  `)
+🎉 *КРЕДИТ В LUDIX ПОЛНОСТЬЮ ПОГАШЕН*
+━━━━━━━━━━━━━━━━━━━━
+✅ Ваш долг обнулен.
+🌟 Кредитная история очищена!
+━━━━━━━━━━━━━━━━━━━━
+  `, { parse_mode: 'Markdown' })
 })
-// СТАТА
+
+// РАБОТА
+bot.hears('💼 Работа', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
+
+  const reward = user.level * 100
+
+  db.prepare(
+    'UPDATE users SET balance = balance + ?, xp = xp + 10 WHERE telegramId = ?'
+  ).run(reward, String(ctx.from.id))
+
+  checkLevelUp(String(ctx.from.id))
+  const updatedUser = getUser(String(ctx.from.id))
+
+  ctx.reply(`
+💼 *ВЫ УСПЕШНО СМЕНИЛИ СМЕНУ НА РАБОТЕ*
+━━━━━━━━━━━━━━━━━━━━
+💰 Заработано: *+${reward}$*
+⭐ Получено опыта: *+10 XP*
+💵 Текущий баланс: *${updatedUser.balance}$*
+━━━━━━━━━━━━━━━━━━━━
+  `, { parse_mode: 'Markdown' })
+})
 
 // СТАТА
+
+// 5. СТАТИСТИКА ИГРОКА LUDIX
 bot.hears('📊 Стата', (ctx) => {
   const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
 
   ctx.reply(`
-📊 СТАТИСТИКА
-
-💰 Всего выиграно: ${user.totalWon}$
-💀 Всего проиграно: ${user.totalLost}$
-🎁 Кейсов открыто: ${user.casesOpened || 0}
-🏦 Текущий долг: ${user.debt || 0}$
-📈 Общий профит с кейсов: ${user.allTimeProfit || 0}$
-🔥 Винстрик: ${user.winstreak}
-  `)
+📊 *ВАША СТАТИСТИКА LUDIX*
+━━━━━━━━━━━━━━━━━━━━
+💰 Всего выиграно: *${user.totalWon || 0}$*
+💀 Всего проиграно: *${user.totalLost || 0}$*
+🎁 Кейсов открыто: *${user.casesOpened || 0}*
+🏦 Текущий долг: *${user.debt || 0}$*
+📈 Общий профит с кейсов: *${user.allTimeProfit || 0}$*
+🔥 Винстрик: *${user.winstreak || 0}*
+━━━━━━━━━━━━━━━━━━━━
+  `, { parse_mode: 'Markdown' })
 })
+
 
 // 4. МАГАЗИН
-// НАЙДИТЕ И ЗАМЕНИТЕ В bot.hears('🛒 Магазин', ...)
+// 6. МЕНЮ МАГАЗИНА LUDIX (ПОСТОЯННЫЕ REPLY-КНОПКИ ТОВАРОВ)
 bot.hears('🛒 Магазин', (ctx) => {
-  ctx.reply(
-    '🛒 МАГАЗИН БИЗНЕСА\n\nИнвестируйте в пассивный доход:',
-    Markup.inlineKeyboard([
-      [Markup.button.callback('💻 Ноутбук (+5$/мин) — 1,500$', 'buy_pc')],
-      [Markup.button.callback('⛏ Криптоферма (+25$/мин) — 7,500$', 'buy_farm')]
-    ])
-  )
+  const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
+
+  ctx.reply(`
+🛒 *ТЕНЕВОЙ МАРКЕТ LUDIX*
+━━━━━━━━━━━━━━━━━━━━
+💵 Ваш баланс: *${user.balance}$*
+📈 Пассивный доход: *${user.income}$/мин*
+━━━━━━━━━━━━━━━━━━━━
+🎰 *Слот-аппарат «Обезьянки»*
+💰 Цена: *3,000$* ｜ Прибыль: *+15$/мин*
+
+  *Откат пит-боссу казино*
+💰 Цена: *15,000$* ｜ Прибыль: *+100$/мин*
+
+🕶 *Доля в подпольном катране*
+💰 Цена: *75,000$* ｜ Прибыль: *+650$/мин*
+━━━━━━━━━━━━━━━━━━━━
+_Для покупки бизнеса используйте кнопки внизу экрана!_
+  `, Markup.keyboard([
+    ['🎰 Купить Аппарат', '🤵‍♂️ Купить Откат'],
+    ['🕶 Купить Долю в катране'],
+    ['↩️ Назад в меню']
+  ]).resize())
 })
 
-// ОБНОВИТЕ СТОИМОСТЬ В АНИМАЦИИ ПОКУПКИ (buy_pc и buy_farm)
-bot.action('buy_pc', (ctx) => {
+// ЛОГИКА ПОКУПКИ 1 ТОВАРА
+bot.hears('🎰 Купить Аппарат', (ctx) => {
   const user = getUser(String(ctx.from.id))
-  if (user.balance < 1500) return ctx.reply('💀 Недостаточно денег. Стоимость: 1500$')
-  db.prepare('UPDATE users SET balance = balance - 1500, income = income + 5 WHERE telegramId = ?').run(String(ctx.from.id))
-  ctx.reply('💻 Вы купили ноутбук! Доход повышен.')
+  if (!user) return ctx.reply('Сначала введи /start')
+  if (user.balance < 3000) return ctx.reply('💀 Недостаточно денег! Стоимость слот-аппарата: *3,000$*', { parse_mode: 'Markdown' })
+
+  db.prepare('UPDATE users SET balance = balance - 3000, income = income + 15 WHERE telegramId = ?').run(String(ctx.from.id))
+  const updatedUser = getUser(String(ctx.from.id))
+  
+  ctx.reply(`🎰 Вы успешно купили Слот-аппарат!\n📈 Ваш пассивный доход повышен на *+15$/мин.*\n💵 Текущий баланс: *${updatedUser.balance}$*`, { parse_mode: 'Markdown' })
 })
 
-bot.action('buy_farm', (ctx) => {
+// ЛОГИКА ПОКУПКИ 2 ТОВАРА
+bot.hears('🤵‍♂️ Купить Откат', (ctx) => {
   const user = getUser(String(ctx.from.id))
-  if (user.balance < 7500) return ctx.reply('💀 Недостаточно денег. Стоимость: 7500$')
-  db.prepare('UPDATE users SET balance = balance - 7500, income = income + 25 WHERE telegramId = ?').run(String(ctx.from.id))
-  ctx.reply('⛏ Вы купили криптоферму! Доход существенно повышен.')
+  if (!user) return ctx.reply('Сначала введи /start')
+  if (user.balance < 15000) return ctx.reply('💀 Недостаточно денег! Стоимость отката пит-боссу: *15,000$*', { parse_mode: 'Markdown' })
+
+  db.prepare('UPDATE users SET balance = balance - 15000, income = income + 100 WHERE telegramId = ?').run(String(ctx.from.id))
+  const updatedUser = getUser(String(ctx.from.id))
+  
+  ctx.reply(`🤵‍♂️ Вы подкупили пит-босса казино!\n📈 Ваш пассивный доход повышен на *+100$/мин.*\n💵 Текущий баланс: *${updatedUser.balance}$*`, { parse_mode: 'Markdown' })
 })
+
+// ЛОГИКА ПОКУПКИ 3 ТОВАРА
+bot.hears('🕶 Купить Долю в катране', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
+  if (user.balance < 75000) return ctx.reply('💀 Недостаточно денег! Стоимость доли в катране: *75,000$*', { parse_mode: 'Markdown' })
+
+  db.prepare('UPDATE users SET balance = balance - 75000, income = income + 650 WHERE telegramId = ?').run(String(ctx.from.id))
+  const updatedUser = getUser(String(ctx.from.id))
+  
+  ctx.reply(`🕶 Вы выкупили долю в подпольном катране!\n📈 Ваш пассивный доход повышен на *+650$/мин.*\n💵 Текущий баланс: *${updatedUser.balance}$*`, { parse_mode: 'Markdown' })
+})
+
 
 
 // 5. ЕЖЕДНЕВНЫЙ БОНУС
-// НАЙДИТЕ И ЗАМЕНИТЕ В bot.hears('🎁 Daily', ...)
+// 7. ЕЖЕДНЕВНЫЙ БОНУС LUDIX (ПЕРЕРАБОТАННАЯ НАГРАДА)
 bot.hears('🎁 Daily', (ctx) => {
   const user = getUser(String(ctx.from.id))
   if (!user) return ctx.reply('Сначала введи /start')
   
   const now = Date.now()
   if (now - user.lastDaily < 86400000) {
-    return ctx.reply('⏳ Daily бонус можно забрать раз в 24 часа!')
+    return ctx.reply('⏳ Ваш Daily бонус еще не восстановился. Он доступен раз в 24 часа!')
   }
 
-  // Динамическая награда зависит от уровня
+  // Динамическая награда: 1000$ + 200$ за каждый уровень
   const reward = 1000 + (user.level * 200)
 
   db.prepare(
     'UPDATE users SET balance = balance + ?, lastDaily = ? WHERE telegramId = ?'
   ).run(reward, now, String(ctx.from.id))
 
-  ctx.reply(`🎁 Вы забрали ежедневный бонус!\n💰 Награда: ${reward}$ (бонус увеличивается с ростом уровня)`)
+  const updatedUser = getUser(String(ctx.from.id))
+
+  ctx.reply(`
+🎁 *ЕЖЕДНЕВНЫЙ БОНУС ЗАБРАН*
+━━━━━━━━━━━━━━━━━━━━
+💰 Ваша награда: *+${reward}$*
+💵 Новый баланс: *${updatedUser.balance}$*
+
+_(Бонус увеличивается вместе с ростом вашего уровня)_
+━━━━━━━━━━━━━━━━━━━━
+  `, { parse_mode: 'Markdown' })
 })
+
 
 // КЕЙСЫ
 
-bot.hears('🎁 Кейсы', (ctx) => {
-  ctx.reply(
-    '🎁 ВЫБЕРИ КЕЙС',
-    Markup.inlineKeyboard([
-      [Markup.button.callback('📦 Обычный — 2500$', 'case_normal')],
-      [Markup.button.callback('🔥 Рискованный — 10000$', 'case_risky')],
-      [Markup.button.callback('💎 Легендарный — 50000$', 'case_legend')]
-    ])
-  )
+// 8. КЕЙСЫ И ЛУТБОКСЫ LUDIX (ПЕРЕКЛЮЧЕНИЕ НА КНОПКИ ВНИЗУ)
+bot.hears('📦 Кейсы', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
+
+  ctx.reply(`
+📦 *КЕЙСЫ И ЛУТБОКСЫ LUDIX*
+━━━━━━━━━━━━━━━━━━━━
+💵 Ваш баланс: *${user.balance}$*
+📊 Открыто кейсов: *${user.casesOpened || 0}*
+━━━━━━━━━━━━━━━━━━━━
+🍀 Испытайте свою удачу! Вы можете выиграть до х10 от стоимости кейса.
+
+_Выберите кейс для открытия кнопками внизу экрана:_
+  `, Markup.keyboard([
+    ['🔓 Открыть Обычный Кейс (2,500$)'],
+    ['↩️ Назад в меню']
+  ]).resize())
 })
 
-// ОБРАБОТКА ДЕЙСТВИЙ (ИНЛАЙН-КНОПКИ ИГР И ПОКУПОК)
-
-// ПОКУПКА ПК
-bot.action('buy_pc', (ctx) => {
+// ЛОГИКА ОТКРЫТИЯ КЕЙСА С ПОКАДРОВОЙ РУЛЕТКОЙ
+bot.hears('🔓 Открыть Обычный Кейс (2,500$)', async (ctx) => {
   const user = getUser(String(ctx.from.id))
-
-  if (user.balance < 1000) {
-    return ctx.reply('💀 Недостаточно денег')
-  }
-
-  db.prepare(
-    'UPDATE users SET balance = balance - 1000, income = income + 5 WHERE telegramId = ?'
-  ).run(String(ctx.from.id))
-
-  ctx.reply('💻 Ты купил ноутбук')
-})
-
-// ПОКУПКА КРИПТОФЕРМЫ
-bot.action('buy_farm', (ctx) => {
-  const user = getUser(String(ctx.from.id))
-
-  if (user.balance < 5000) {
-    return ctx.reply('💀 Недостаточно денег')
-  }
-
-  db.prepare(
-    'UPDATE users SET balance = balance - 5000, income = income + 20 WHERE telegramId = ?'
-  ).run(String(ctx.from.id))
-
-  ctx.reply('⛏ Ты купил криптоферму')
-})
-
-// ИГРА СOINFLIP
-// ОБНОВЛЁННЫЙ COINFLIP (Ставка: 1000$)
-// ОБНОВЛЕННЫЙ COINFLIP
-bot.action('coinflip', (ctx) => {
-  const user = getUser(String(ctx.from.id))
-  const bet = 1000
-
-  if (user.balance < bet) {
-    return ctx.reply('💀 Недостаточно денег. Ставка в Coinflip: 1000$')
-  }
-
-  // Разнообразные ответы на проигрыш в монетке
-  const coinLosePhrases = [
-    '💀 Монетка упала не той стороной. Ты проиграл.',
-    '🤡 Ой, кажется, твоя интуиция тебя подвела. Попробуй еще раз, чемпион.',
-    '💸 Деньги улетели в зрительный зал. Ставка слита.',
-    '📉 Увы и ах, фортуна повернулась к тебе спиной. Минус 1000$.',
-    '👹 Казино благодарит тебя за пожертвование.',
-    '🦴 Чистый проигрыш. Твой винстрик обнулился, лудоман.',
-    '🥶 Не угадал. Монетка безжалостна.'
-  ]
-
-  // Математический шанс 47.5% на победу
-  const win = Math.random() < 0.475
-
-  if (win) {
-    db.prepare(`
-      UPDATE users 
-      SET balance = balance + 1000, xp = xp + 15, winstreak = winstreak + 1, totalWon = totalWon + 1000 
-      WHERE telegramId = ?
-    `).run(String(ctx.from.id))
-
-    checkLevelUp(String(ctx.from.id))
-    
-    // Получаем обновленные данные пользователя для вывода актуального винстрика
-    const updatedUser = getUser(String(ctx.from.id))
-    ctx.reply(`🪙 Монетка упала как надо!\n🤑 Ты выиграл 1000$!\n🔥 Твой винстрик: ${updatedUser.winstreak}`)
-  } else {
-    db.prepare(`
-      UPDATE users 
-      SET balance = balance - 1000, xp = xp + 5, winstreak = 0, totalLost = totalLost + 1000 
-      WHERE telegramId = ?
-    `).run(String(ctx.from.id))
-
-    const randomCoinLoseText = coinLosePhrases[Math.floor(Math.random() * coinLosePhrases.length)]
-    ctx.reply(randomCoinLoseText)
-  }
-})
-
-
-// ИГРА SLOTS
-// ОБНОВЛЕННЫЕ СЛОТЫ
-bot.action('slots', (ctx) => {
-  const user = getUser(String(ctx.from.id))
-  const bet = 1000
-
-  if (user.balance < bet) {
-    return ctx.reply('💀 Недостаточно денег. Ставка в слотах: 1000$')
-  }
-
-  // Массивы фраз для проигрышей (для разнообразия)
-  const losePhrases = [
-    '🎰 Барабаны крутятся, лавэха мутится... но не у тебя.',
-    '💀 Аппарат заглотил твои 1000$ и даже не подавился.',
-    '💸 Минус косарь. Но в следующий раз точно повезет, веришь?',
-    '🪐 Лудомания — вещь тонкая. Попробуй крутануть еще раз.',
-    '💩 Три в ряд? Нет, сегодня только три буквы. Ты проиграл.',
-    '📉 График твоего баланса стремительно летит вниз.',
-    '🤷‍♂️ Слотомашина сегодня не в настроении кормить игроков.'
-  ]
-
-  // Скрытая математическая прокрутка (генерация исхода по весам)
-  const rand = Math.random() * 100
-  let a, b, c
-  let winAmount = 0
-  let isJackpot = false
-
-  if (rand < 2.0) { 
-    // 2% ШАНС: ТОП ДЖЕКПОТ (Бриллианты)
-    a = b = c = '💎'
-    winAmount = 15000 // x15
-    isJackpot = true
-  } else if (rand < 5.0) { 
-    // 3% ШАНС: ОГНЕННЫЙ ДЖЕКПОТ (Огонь)
-    a = b = c = '🔥'
-    winAmount = 7000 // x7
-    isJackpot = true
-  } else if (rand < 9.5) { 
-    // 4.5% ШАНС: СРЕДНИЙ ВЫИГРЫШ (Вишни)
-    a = b = c = '🍒'
-    winAmount = 4000 // x4
-  } else if (rand < 15.0) { 
-    // 5.5% ШАНС: МЕЛКИЙ ВЫИГРЫШ (Лимоны)
-    a = b = c = '🍋'
-    winAmount = 2000 // x2
-  } else if (rand < 45.0) {
-    // 30% ШАНС: ЭФФЕКТ "ПОЧТИ ВЫИГРАЛ" (Near Miss)
-    // Два первых символа совпадают, создавая иллюзию близкой победы!
-    const symbols = ['🍒', '💎', '🔥', '🍋']
-    a = b = symbols[Math.floor(Math.random() * symbols.length)]
-    // Третий символ гарантированно другой
-    do {
-      c = symbols[Math.floor(Math.random() * symbols.length)]
-    } while (c === a)
-  } else {
-    // 55% ШАНС: Абсолютный хаос (все символы разные или не создают комбинацию)
-    const symbols = ['🍒', '💎', '🔥', '🍋']
-    a = symbols[Math.floor(Math.random() * symbols.length)]
-    b = symbols[Math.floor(Math.random() * symbols.length)]
-    c = symbols[Math.floor(Math.random() * symbols.length)]
-    // Если случайно сгенерировались 3 одинаковых, принудительно ломаем
-    if (a === b && b === c) {
-      c = a === '🍒' ? '💎' : '🍒'
-    }
-  }
-
-  const resultLine = `${a} ｜ ${b} ｜ ${c}`
-
-  if (winAmount > 0) {
-    // Расчет чистого профита
-    const netProfit = winAmount - bet
-
-    db.prepare(`
-      UPDATE users 
-      SET balance = balance + ?, xp = xp + 20, totalWon = totalWon + ? 
-      WHERE telegramId = ?
-    `).run(netProfit, winAmount, String(ctx.from.id))
-
-    checkLevelUp(String(ctx.from.id))
-
-    if (isJackpot) {
-      ctx.reply(`🎰 ${resultLine}\n\n🔥 СУМАСШЕДШИЙ ДЖЕКПОТ! 🔥\n🤑 Ты выиграл +${winAmount}$!`)
-    } else {
-      ctx.reply(`🎰 ${resultLine}\n\n🤑 Поздравляем!\n💰 Выигрыш: +${winAmount}$ (Чистый профит: +${netProfit}$)`)
-    }
-  } else {
-    // Проигрыш
-    db.prepare(`
-      UPDATE users 
-      SET balance = balance - ?, xp = xp + 5, totalLost = totalLost + ? 
-      WHERE telegramId = ?
-    `).run(bet, bet, String(ctx.from.id))
-
-    const randomLoseText = losePhrases[Math.floor(Math.random() * losePhrases.length)]
-    ctx.reply(`🎰 ${resultLine}\n\n${randomLoseText}\n📉 Ставка 1000$ ушла заведению.`)
-  }
-})
-
-// ОБЫЧНЫЙ КЕЙС
-
-// ПРИМЕР ДЛЯ КЕЙСА (Стоимость: 2500$)
-bot.action('open_case', (ctx) => {
-  const user = getUser(String(ctx.from.id))
+  if (!user) return ctx.reply('Сначала введи /start')
+  
   const price = 2500
-  if (user.balance < price) return ctx.reply('💀 Недостаточно денег для открытия кейса!')
-
-  // Математические шансы (в сумме 100)
-  // Игрок чаще получает "около-окупаемые" призы, создавая иллюзию близости к победе
-  const rand = Math.random() * 100
-
-  let winAmount = 0
-  let tier = ''
-
-  if (rand < 40) {         // 40% шанс - мелкий утешительный приз (минус для банка)
-    winAmount = Math.floor(Math.random() * 800) + 400 // 400$ - 1200$
-    tier = '⚪ ОБЫЧНЫЙ'
-  } else if (rand < 75) {  // 35% шанс - почти окупился (небольшой минус)
-    winAmount = Math.floor(Math.random() * 1000) + 1400 // 1400$ - 2400$
-    tier = '🟢 НЕОБЫЧНЫЙ'
-  } else if (rand < 93) {  // 18% шанс - Удвоение (окупился в небольшой плюс)
-    winAmount = Math.floor(Math.random() * 1500) + 3000 // 3000$ - 4500$
-    tier = '🔵 РЕДКИЙ'
-  } else if (rand < 99) {  // 6% шанс - Крупный выигрыш
-    winAmount = Math.floor(Math.random() * 4000) + 6000 // 6000$ - 10000$
-    tier = '🟣 ЭПИЧЕСКИЙ'
-  } else {                 // 1% шанс - СВЕРХДОХОД (ДЖЕКПОТ)
-    winAmount = 25000
-    tier = '🔥 ЛЕГЕНДАРНЫЙ ДЖЕКПОТ'
+  if (user.balance < price) {
+    return ctx.reply(`💀 Недостаточно денег! Стоимость кейса: ${price}$. Ваш баланс: ${user.balance}$`)
   }
 
-  const profit = winAmount - price
+  // АНИМАЦИЯ: Эффект вращения барабана кейса
+  const msg = await ctx.reply('📦 *Кейс покупается...* \n🔑 _Замок открыт, рулетка закрутилась..._')
 
-  db.prepare(`
-    UPDATE users 
-    SET balance = balance + ?, casesOpened = casesOpened + 1, allTimeProfit = allTimeProfit + ? 
-    WHERE telegramId = ?
-  `).run(profit, profit, String(ctx.from.id))
+  setTimeout(async () => {
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, '📦 [ 🟦 Rare ｜ 🟩 Uncom ｜ 🟪 Epic ] \n_Рулетка замедляется..._')
 
-  ctx.reply(`📦 Вы открыли кейс за ${price}$\n\nРанг: ${tier}\n💰 Выпало: ${winAmount}$\n${profit >= 0 ? `📈 Чистый профит: +${profit}$` : `📉 Убыток: ${profit}$`}`)
-})
+    setTimeout(async () => {
+      // Математические шансы удержания игрока (в сумме 100)
+      const rand = Math.random() * 100
+      let winAmount = 0
+      let tier = ''
 
-// ПРОСРОЧКА КРЕДИТА
-
-setInterval(() => {
-
-  const users = db.prepare('SELECT * FROM users').all()
-
-  for(const user of users) {
-
-    if(user.debt > 0) {
-
-      const passed = Date.now() - user.debtTimer
-
-      // 24 часа
-      if(passed >= 86400000) {
-
-        // если денег хватает — автоматическое списание
-        if(user.balance >= user.debt) {
-
-          db.prepare(`
-            UPDATE users
-            SET
-              balance = balance - debt,
-              debt = 0
-            WHERE telegramId = ?
-          `).run(user.telegramId)
-
-        } else {
-
-          // штраф
-          db.prepare(`
-            UPDATE users
-            SET
-              income = income - 5,
-              blacklist = 1
-            WHERE telegramId = ?
-          `).run(user.telegramId)
-
-        }
-
+      if (rand < 40) {         // 40% шанс — мелкий утешительный приз (минус для банка)
+        winAmount = Math.floor(Math.random() * 800) + 400 // 400$ - 1200$
+        tier = '⚪ ОБЫЧНЫЙ СЛУЧАЙ'
+      } else if (rand < 75) {  // 35% шанс — почти окупился (небольшой минус)
+        winAmount = Math.floor(Math.random() * 1000) + 1400 // 1400$ - 2400$
+        tier = '🟢 НЕОБЫЧНЫЙ ИСХОД'
+      } else if (rand < 93) {  // 18% шанс — Удвоение (окупился в небольшой плюс)
+        winAmount = Math.floor(Math.random() * 1500) + 3000 // 3000$ - 4500$
+        tier = '🔵 РЕДКИЙ КУШ'
+      } else if (rand < 99) {  // 6% шанс — Крупный выигрыш
+        winAmount = Math.floor(Math.random() * 4000) + 6000 // 6000$ - 10000$
+        tier = '🟣 ЭПИЧЕСКИЙ ДРОП'
+      } else {                 // 1% шанс — СВЕРХДОХОД (ДЖЕКПОТ)
+        winAmount = 25000
+        tier = '🔥 ЛЕГЕНДАРНЫЙ ДЖЕКПОТ LUDIX'
       }
 
-    }
+      const profit = winAmount - price
 
-  }
+      // Обновляем баланс, счетчик кейсов и общий профит
+      db.prepare(`
+        UPDATE users 
+        SET balance = balance + ?, casesOpened = casesOpened + 1, allTimeProfit = allTimeProfit + ? 
+        WHERE telegramId = ?
+      `).run(profit, profit, String(ctx.from.id))
 
-}, 60000)
-// PASSIVE INCOME
-// НАЙДИТЕ И ЗАМЕНИТЕ ИНТЕРВАЛ В САМОМ КОНЦЕ ФАЙЛА
-// Изменяем интервал на 5 минут (300000 мс), но доход умножаем на 5
+      const updatedUser = getUser(String(ctx.from.id))
+
+      await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, `
+📦 *КЕЙС УСПЕШНО ОТКРЫТ*
+━━━━━━━━━━━━━━━━━━━━
+Ранг дропа: *${tier}*
+💰 Выпало из кейса: *${winAmount}$*
+
+${profit >= 0 ? `📈 Чистый профит: *+${profit}$* 🎉` : `📉 Убыток: *${profit}$*`}
+💵 Ваш новый баланс: *${updatedUser.balance}$*
+━━━━━━━━━━━━━━━━━━━━
+      `, { parse_mode: 'Markdown' })
+
+    }, 800)
+  }, 800)
+})
+
+// ====================================================================
+// ФИНАЛЬНЫЙ РАЗДЕЛ: ПАССИВНЫЙ ДОХОД LUDIX И ЗАПУСК СЕРВЕРА
+// ====================================================================
+
+// НАЧИСЛЕНИЕ ДОХОДА (КАЖДЫЕ 5 МИНУТ С УМНОЖЕНИЕМ НА 5)
 setInterval(() => {
   const users = db.prepare('SELECT * FROM users').all()
+
   for (const user of users) {
     const totalIncome = user.income * 5
     db.prepare(
       'UPDATE users SET balance = balance + ? WHERE telegramId = ?'
     ).run(totalIncome, user.telegramId)
   }
-  console.log('Пассивный доход начислен (каждые 5 минут)')
+
+  console.log('Пассивный доход LUDIX успешно начислен')
 }, 300000)
 
-
+// АСИНХРОННЫЙ СТАРТ БОТА
 async function startBot() {
   try {
     console.log('Попытка запуска бота...')
@@ -589,22 +567,25 @@ async function startBot() {
     console.log('✅ BOT STARTED SUCCESSFULLY')
   } catch (error) {
     console.error('❌ КРИТИЧЕСКАЯ ОШИБКА ПРИ ЗАПУСКЕ:', error.message)
-    console.error(error)
   }
 }
 
 startBot()
 
+// Корректная остановка бота при перезапуске сервера хостинга
 process.once('SIGINT', () => bot.stop('SIGINT'))
 process.once('SIGTERM', () => bot.stop('SIGTERM'))
 
-// ВЕБ-СЕРВЕР ДЛЯ RENDER
+// ВЕБ-СЕРВЕР ДЛЯ ОБХОДА БЛОКИРОВКИ ПОРТОВ RENDER
 const http = require('http')
+
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' })
-  res.end('Bot is running\n')
+  res.end('LUDIX Bot is running\n')
 })
+
 const PORT = process.env.PORT || 10000
+
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`)
 })
