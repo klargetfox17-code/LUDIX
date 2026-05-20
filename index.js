@@ -49,7 +49,20 @@ CREATE TABLE IF NOT EXISTS users (
 `).run()
 
 // Безопасное добавление колонок для старых пользователей (без кучи блоков try/catch)
-const columns = ['xp DEFAULT 0', 'level DEFAULT 1', 'winstreak DEFAULT 0', 'totalWon DEFAULT 0', 'totalLost DEFAULT 0']
+const columns = [
+  'xp DEFAULT 0', 
+  'level DEFAULT 1', 
+  'winstreak DEFAULT 0', 
+  'totalWon DEFAULT 0', 
+  'totalLost DEFAULT 0',
+  'casesOpened INTEGER DEFAULT 0',
+  'debt INTEGER DEFAULT 0',
+  'debtTimer INTEGER DEFAULT 0',
+  'blacklist INTEGER DEFAULT 0',
+  'credits INTEGER DEFAULT 0',
+  'allTimeProfit INTEGER DEFAULT 0'
+]
+
 for (const col of columns) {
   try { db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run() } catch (e) {}
 }
