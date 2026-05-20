@@ -208,6 +208,7 @@ bot.hears('💳 Погасить', (ctx) => {
 })
 // СТАТА
 
+// СТАТА
 bot.hears('📊 Стата', (ctx) => {
   const user = getUser(String(ctx.from.id))
 
@@ -215,18 +216,14 @@ bot.hears('📊 Стата', (ctx) => {
 📊 СТАТИСТИКА
 
 💰 Всего выиграно: ${user.totalWon}$
-
 💀 Всего проиграно: ${user.totalLost}$
-
-🎁 Кейсов открыто: ${user.casesOpened}
-
-🏦 Кредитов взято: ${user.credits}
-
-📈 Общий профит: ${user.allTimeProfit}$
-
+🎁 Кейсов открыто: ${user.casesOpened || 0}
+🏦 Текущий долг: ${user.debt || 0}$
+📈 Общий профит с кейсов: ${user.allTimeProfit || 0}$
 🔥 Винстрик: ${user.winstreak}
   `)
 })
+
 // 4. МАГАЗИН
 bot.hears('🛒 Магазин', (ctx) => {
   ctx.reply(
