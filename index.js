@@ -164,7 +164,7 @@ bot.hears('🎰 Казино', (ctx) => {
 // ВЫБОР СТАВОК ДЛЯ МОНЕТКИ (COINFLIP)
 bot.hears('🪙 Монетка (x2)', (ctx) => {
   const user = getUser(String(ctx.from.id), ctx)
-  ctx.reply(`
+if (!user) return
 🪙 *РЕЖИМ: COINFLIP (МОНЕТКА)*
 ━━━━━━━━━━━━━━━━━━━━
 💵 Баланс: *${user.balance}$*
