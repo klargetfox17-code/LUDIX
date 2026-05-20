@@ -321,14 +321,13 @@ bot.action('buy_farm', (ctx) => {
 })
 
 // ИГРА СOINFLIP
+// ОБНОВЛЁННЫЙ COINFLIP (Ставка: 1000$)
 bot.action('coinflip', (ctx) => {
   const user = getUser(String(ctx.from.id))
+  if (user.balance < 1000) return ctx.reply('💀 Недостаточно денег')
 
-  if (user.balance < 1000) {
-    return ctx.reply('💀 Недостаточно денег')
-  }
-
-  const win = Math.random() > 0.5
+  // Шанс 47.5% на победу. 52.5% — заведение забирает деньги (House Edge)
+  const win = Math.random() < 0.475
 
   if (win) {
     db.prepare(`
@@ -337,12 +336,8 @@ bot.action('coinflip', (ctx) => {
       WHERE telegramId = ?
     `).run(String(ctx.from.id))
 
-    const leveledUp = checkLevelUp(String(ctx.from.id))
-    
-    if (leveledUp) {
-      ctx.reply('🎉 ОГО! Ты повысил свой уровень! Получено +10 000$!')
-    }
-    ctx.reply('🤑 Ты выиграл 1000$')
+    checkLevelUp(String(ctx.from.id))
+    ctx.reply(`🪙 Монетка упала орлом!\n🤑 Вы выиграли 1000$!\n🔥 Винстрик: ${user.winstreak + 1}`)
   } else {
     db.prepare(`
       UPDATE users 
@@ -350,21 +345,10 @@ bot.action('coinflip', (ctx) => {
       WHERE telegramId = ?
     `).run(String(ctx.from.id))
 
-    const loseMessages = [
-  '💀 Ты проиграл',
-  '🤡 Ну вот и зарплата ушла',
-  '📉 Инвестор из тебя так себе',
-  '💸 Казино говорит спасибо',
-  '🪦 press F'
-]
-
-ctx.reply(
-  loseMessages[Math.floor(Math.random() * loseMessages.length)]
-)
-
+    ctx.reply('🪙 Монетка упала решкой!\n💀 Вы проиграли 1000$')
   }
-
 })
+
 // ИГРА SLOTS
 bot.action('slots', (ctx) => {
   const user = getUser(String(ctx.from.id))
