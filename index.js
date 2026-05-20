@@ -6,6 +6,32 @@ require('dotenv').config()
 const token = process.env.BOT_TOKEN || '8721680626:AAFuGPHaUhZfXQeRQsEQXcNvYG5uDzWIG5s'
 const bot = new Telegraf(token)
 const db = new Database('game.db')
+// ==========================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (ОБЯЗАТЕЛЬНО ТУТ)
+function getUser(id) {
+  return db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
+}
+
+function createUser(id, username) {
+  db.prepare(
+    'INSERT OR IGNORE INTO users (telegramId, username) VALUES (?, ?)'
+  ).run(id, username)
+}
+
+function checkLevelUp(id) {
+  const user = getUser(id)
+  if (!user) return false
+  const needXP = user.level * 100
+
+  if (user.xp >= needXP) {
+    db.prepare(
+      'UPDATE users SET level = level + 1, xp = 0, balance = balance + 10000 WHERE telegramId = ?'
+    ).run(id)
+    return true
+  }
+  return false
+}
+// ==========================================
 
 db.prepare(`
 CREATE TABLE IF NOT EXISTS users (
