@@ -54,25 +54,6 @@ for (const col of columns) {
   try { db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run() } catch (e) {}
 }
 
-function createUser(id, username) {
-  db.prepare(
-    'INSERT OR IGNORE INTO users (telegramId, username) VALUES (?, ?)'
-  ).run(id, username)
-}
-
-function checkLevelUp(id) {
-  const user = getUser(id)
-  const needXP = user.level * 100
-
-  if (user.xp >= needXP) {
-    db.prepare(
-      'UPDATE users SET level = level + 1, xp = 0, balance = balance + 10000 WHERE telegramId = ?'
-    ).run(id)
-    return true
-  }
-  return false
-}
-
 // START — Постоянное меню на кнопках
 bot.start((ctx) => {
   const id = String(ctx.from.id)
