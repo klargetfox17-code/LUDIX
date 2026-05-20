@@ -21,20 +21,11 @@ CREATE TABLE IF NOT EXISTS users (
   totalLost INTEGER DEFAULT 0
 )
 `).run()
-try { db.prepare('ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN winstreak INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN totalWon INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN totalLost INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN casesOpened INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN allTimeProfit INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN lastSpin INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN debt INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN debtTimer INTEGER DEFAULT 0').run() } catch(e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN blacklist INTEGER DEFAULT 0').run() } catch(e) {}
-function getUser(id) {
-  return db.prepare('SELECT * FROM users WHERE telegramId = ?').get(id)
+
+// Безопасное добавление колонок для старых пользователей (без кучи блоков try/catch)
+const columns = ['xp DEFAULT 0', 'level DEFAULT 1', 'winstreak DEFAULT 0', 'totalWon DEFAULT 0', 'totalLost DEFAULT 0']
+for (const col of columns) {
+  try { db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run() } catch (e) {}
 }
 
 function createUser(id, username) {
