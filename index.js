@@ -2,10 +2,10 @@ const { Telegraf, Markup } = require('telegraf')
 const Database = require('better-sqlite3')
 require('dotenv').config()
 
-const token = process.env.BOT_TOKEN || '8721680626:AAFuGPHaUhZfXQeRQsEQXcNvYG5uDzWIG5s'
+const token = process.env.BOT_TOKEN
 const bot = new Telegraf(token)
 const db = new Database('game.db')
-
+db.pragma('journal_mode = WAL')
 // ИНИЦИАЛИЗАЦИЯ ТАБЛИЦЫ
 db.prepare(`
 CREATE TABLE IF NOT EXISTS users (
@@ -96,14 +96,13 @@ bot.start((ctx) => {
 
   ctx.reply(
     '💸 ДОБРО ПОЖАЛОВАТЬ В ИГРУ LUDIX',
-       Markup.keyboard([
+    Markup.keyboard([
       ['💰 Профиль', '🎰 Казино'],
       ['🛒 Магазин', '🎁 Daily'],
       ['📊 Стата', '🏆 Топ'],
       ['📦 Кейсы', '🏦 Кредит'],
-      ['💼 Работа'] // <-- ВЫВЕЛИ РАБОТУ ОТДЕЛЬНОЙ СТРОКОЙ НА ГЛАВНЫЙ ЭКРАН
+      ['💼 Работа']
     ]).resize()
-
   )
 })
 
@@ -561,7 +560,8 @@ bot.hears('💼 Работа', (ctx) => {
 
   const now = Date.now()
   const cooldown = 60000 // 60 секунд кулдауна в миллисекундах
-  const timeLeft = cooldown - (now - user.lastWork)
+  const lastWork = user.lastWork || 0
+const timeLeft = cooldown - (now - lastWork)
 
   if (timeLeft > 0) {
     const secondsLeft = Math.ceil(timeLeft / 1000)
@@ -828,7 +828,9 @@ async function startBot() {
     console.error('❌ КРИТИЧЕСКАЯ ОШИБКА ПРИ ЗАПУСКЕ:', error.message)
   }
 }
-
+bot.catch((err) => {
+  console.log(err)
+})
 startBot()
 
 // Корректная остановка бота при перезапуске сервера хостинга
