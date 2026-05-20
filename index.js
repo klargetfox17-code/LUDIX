@@ -168,7 +168,8 @@ bot.hears('🎰 Вернуться в Казино', (ctx) => {
 // ИГРОВОЙ ДВИЖОК СЛОТОВ LUDIX И СЛУШАТЕЛИ СТАВОК
 // ====================================================================
 
-async function runSlotsMenu(ctx, betAmount) {
+// СИСТЕМНЫЙ ДВИЖОК МОНЕТКИ (ОБРАБОТКА И АНИМАЦИЯ СТАВОК)
+async function runCoinflipMenu(ctx, betAmount) {
   const user = getUser(String(ctx.from.id))
   if (!user) return ctx.reply('Сначала введи /start')
   
@@ -180,89 +181,58 @@ async function runSlotsMenu(ctx, betAmount) {
   }
 
   const losePhrases = [
-    'Барабаны крутятся, лавэха мутится... но не у тебя.',
-    'Аппарат заглотил твои деньги и даже не подавился.',
-    'График твоего баланса стремительно летит вниз.',
-    'Однорукий бандит безжалостно забрал твои сбережения.'
+    'Казино LUDIX благодарит тебя за пожертвование.',
+    'Твой винстрик с грохотом обнулился, лудоман.',
+    'Не угадал. Монетка сегодня безжалостна.',
+    'Минус кэш. Но в следующий раз точно повезет!'
   ]
 
-  const symbols = ['🍒', '💎', '🔥', '🍋']
-  const rand = Math.random() * 100
-  let a, b, c
-  let multiplier = 0
-
-  // Математический просчет исхода (RTP ~94% для удержания)
-  if (rand < 2.0) { a = b = c = '💎'; multiplier = 15 } 
-  else if (rand < 5.0) { a = b = c = '🔥'; multiplier = 7 } 
-  else if (rand < 9.5) { a = b = c = '🍒'; multiplier = 4 } 
-  else if (rand < 15.0) { a = b = c = '🍋'; multiplier = 2 } 
-  else if (rand < 45.0) {
-    // Эффект "почти выиграл"
-    a = b = symbols[Math.floor(Math.random() * symbols.length)]
-    do { c = symbols[Math.floor(Math.random() * symbols.length)] } while (c === a)
-  } else {
-    a = symbols[Math.floor(Math.random() * symbols.length)]
-    b = symbols[Math.floor(Math.random() * symbols.length)]
-    c = symbols[Math.floor(Math.random() * symbols.length)]
-    if (a === b && b === c) c = a === '🍒' ? '💎' : '🍒'
-  }
-
-  const msg = await ctx.reply(`🎰 [ 🌀 ｜ 🌀 ｜ 🌀 ] \n_Барабаны закрутились..._`)
+  const message = await ctx.reply('🪙 *Монетка подброшена...* \n🌀 _Крутится-вертится в воздухе..._', { parse_mode: 'Markdown' })
 
   setTimeout(async () => {
-    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, `🎰 [ ${a} ｜ 🌀 ｜ 🌀 ]`)
-    setTimeout(async () => {
-      await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, `🎰 [ ${a} ｜ ${b} ｜ 🌀 ]`)
-      setTimeout(async () => {
-        if (multiplier > 0) {
-          const winAmount = bet * multiplier
-          const netProfit = winAmount - bet
+    const win = Math.random() < 0.475 // 47.5% шанс на победу
 
-          db.prepare(`
-            UPDATE users SET balance = balance + ?, xp = xp + 20, totalWon = totalWon + ? WHERE telegramId = ?
-          `).run(netProfit, winAmount, String(ctx.from.id))
-          checkLevelUp(String(ctx.from.id))
-          const updatedUser = getUser(String(ctx.from.id))
-          
-          await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, `
-🎰 *РЕЗУЛЬТАТ СЛОТ-МАШИНЫ*
+    if (win) {
+      db.prepare(`
+        UPDATE users SET balance = balance + ?, xp = xp + 15, winstreak = winstreak + 1, totalWon = totalWon + ? WHERE telegramId = ?
+      `).run(bet, bet, String(ctx.from.id))
+      checkLevelUp(String(ctx.from.id))
+      const updatedUser = getUser(String(ctx.from.id))
+
+      await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `
+🪙 *РЕЗУЛЬТАТ: ОРЕЛ!*
 ━━━━━━━━━━━━━━━━━━━━
-🎰 [  ${a}  ｜  ${b}  ｜  ${c}  ]
-━━━━━━━━━━━━━━━━━━━━
-🎉 *ВЫИГРЫШНАЯ КОМБИНАЦИЯ х${multiplier}!*
-💰 Награда: *+${winAmount}$*
+🤑 Ты выиграл: *+${bet}$*
 💵 Твой баланс: *${updatedUser.balance}$*
+🔥 Текущий винстрик: *${updatedUser.winstreak}*
 ━━━━━━━━━━━━━━━━━━━━
-          `, { parse_mode: 'Markdown' })
-        } else {
-          db.prepare(`
-            UPDATE users SET balance = balance - ?, xp = xp + 5, totalLost = totalLost + ? WHERE telegramId = ?
-          `).run(bet, bet, String(ctx.from.id))
-          const updatedUser = getUser(String(ctx.from.id))
-          const randText = losePhrases[Math.floor(Math.random() * losePhrases.length)]
-          
-          await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, `
-🎰 *РЕЗУЛЬТАТ СЛОТ-МАШИНЫ*
+      `, { parse_mode: 'Markdown' })
+    } else {
+      db.prepare(`
+        UPDATE users SET balance = balance - ?, xp = xp + 5, winstreak = 0, totalLost = totalLost + ? WHERE telegramId = ?
+      `).run(bet, bet, String(ctx.from.id))
+      const updatedUser = getUser(String(ctx.from.id))
+      const randText = losePhrases[Math.floor(Math.random() * losePhrases.length)]
+
+      await ctx.telegram.editMessageText(ctx.chat.id, message.message_id, null, `
+🪙 *РЕЗУЛЬТАТ: РЕШКА!*
 ━━━━━━━━━━━━━━━━━━━━
-🎰 [  ${a}  ｜  ${b}  ｜  ${c}  ]
-━━━━━━━━━━━━━━━━━━━━
-📉 Минус ставка: *-${bet}$*
+📉 Ты проиграл: *-${bet}$*
 💵 Твой баланс: *${updatedUser.balance}$*
-🤷‍♂️ _${randText}_
+❌ _${randText}_
 ━━━━━━━━━━━━━━━━━━━━
-          `, { parse_mode: 'Markdown' })
-        }
-      }, 600)
-    }, 600)
-  }, 600)
+      `, { parse_mode: 'Markdown' })
+    }
+  }, 1200)
 }
 
-// СЛУШАТЕЛИ КНОПОК СЛОТОВ
-bot.hears('🎰 Ставка: 100$', (ctx) => runSlotsMenu(ctx, 100))
-bot.hears('🎰 Ставка: 500$', (ctx) => runSlotsMenu(ctx, 500))
-bot.hears('🎰 Ставка: 1000$', (ctx) => runSlotsMenu(ctx, 1000))
-bot.hears('🎰 Ставка: 5000$', (ctx) => runSlotsMenu(ctx, 5000))
-bot.hears('🔥 Крутануть Вобанк (All-In)', (ctx) => runSlotsMenu(ctx, 'allin'))
+// СЛУШАТЕЛИ КНОПОК СТАВОК ДЛЯ МОНЕТКИ
+bot.hears('💵 Ставка: 100$', (ctx) => runCoinflipMenu(ctx, 100))
+bot.hears('💵 Ставка: 500$', (ctx) => runCoinflipMenu(ctx, 500))
+bot.hears('💵 Ставка: 1000$', (ctx) => runCoinflipMenu(ctx, 1000))
+bot.hears('💵 Ставка: 5000$', (ctx) => runCoinflipMenu(ctx, 5000))
+bot.hears('🔥 Рискнуть Вобанк (All-In)', (ctx) => runCoinflipMenu(ctx, 'allin'))
+
 
 
 
