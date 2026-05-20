@@ -151,12 +151,13 @@ bot.hears('🏦 Кредит', (ctx) => {
   const creditAmount = 10000
   const finalDebt = 15000
 
-  db.prepare(`
+    db.prepare(`
     UPDATE users
     SET
       balance = balance + ?,
       debt = ?,
-      debtTimer = ?
+      debtTimer = ?,
+      credits = credits + 1
     WHERE telegramId = ?
   `).run(
     creditAmount,
@@ -164,6 +165,7 @@ bot.hears('🏦 Кредит', (ctx) => {
     Date.now(),
     String(ctx.from.id)
   )
+
 
   ctx.reply(`
 🏦 КРЕДИТ ОДОБРЕН
