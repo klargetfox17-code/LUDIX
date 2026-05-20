@@ -227,15 +227,32 @@ bot.hears('📊 Стата', (ctx) => {
 })
 
 // 4. МАГАЗИН
+// НАЙДИТЕ И ЗАМЕНИТЕ В bot.hears('🛒 Магазин', ...)
 bot.hears('🛒 Магазин', (ctx) => {
   ctx.reply(
-    '🛒 МАГАЗИН',
+    '🛒 МАГАЗИН БИЗНЕСА\n\nИнвестируйте в пассивный доход:',
     Markup.inlineKeyboard([
-      [Markup.button.callback('💻 Ноутбук (+5$/мин) — 1000$', 'buy_pc')],
-      [Markup.button.callback('⛏ Криптоферма (+20$/мин) — 5000$', 'buy_farm')]
+      [Markup.button.callback('💻 Ноутбук (+5$/мин) — 1,500$', 'buy_pc')],
+      [Markup.button.callback('⛏ Криптоферма (+25$/мин) — 7,500$', 'buy_farm')]
     ])
   )
 })
+
+// ОБНОВИТЕ СТОИМОСТЬ В АНИМАЦИИ ПОКУПКИ (buy_pc и buy_farm)
+bot.action('buy_pc', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+  if (user.balance < 1500) return ctx.reply('💀 Недостаточно денег. Стоимость: 1500$')
+  db.prepare('UPDATE users SET balance = balance - 1500, income = income + 5 WHERE telegramId = ?').run(String(ctx.from.id))
+  ctx.reply('💻 Вы купили ноутбук! Доход повышен.')
+})
+
+bot.action('buy_farm', (ctx) => {
+  const user = getUser(String(ctx.from.id))
+  if (user.balance < 7500) return ctx.reply('💀 Недостаточно денег. Стоимость: 7500$')
+  db.prepare('UPDATE users SET balance = balance - 7500, income = income + 25 WHERE telegramId = ?').run(String(ctx.from.id))
+  ctx.reply('⛏ Вы купили криптоферму! Доход существенно повышен.')
+})
+
 
 // 5. ЕЖЕДНЕВНЫЙ БОНУС
 // НАЙДИТЕ И ЗАМЕНИТЕ В bot.hears('🎁 Daily', ...)
