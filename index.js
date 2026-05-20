@@ -538,17 +538,19 @@ setInterval(() => {
 
 }, 60000)
 // PASSIVE INCOME
+// НАЙДИТЕ И ЗАМЕНИТЕ ИНТЕРВАЛ В САМОМ КОНЦЕ ФАЙЛА
+// Изменяем интервал на 5 минут (300000 мс), но доход умножаем на 5
 setInterval(() => {
   const users = db.prepare('SELECT * FROM users').all()
-
   for (const user of users) {
+    const totalIncome = user.income * 5
     db.prepare(
-      'UPDATE users SET balance = balance + income WHERE telegramId = ?'
-    ).run(user.telegramId)
+      'UPDATE users SET balance = balance + ? WHERE telegramId = ?'
+    ).run(totalIncome, user.telegramId)
   }
+  console.log('Пассивный доход начислен (каждые 5 минут)')
+}, 300000)
 
-  console.log('income added')
-}, 60000)
 
 async function startBot() {
   try {
